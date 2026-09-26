@@ -3,6 +3,11 @@
   "note": "Copied from working tree; source hashes identify exact bytes, including pre-existing changes. Subsequent adaptations tracked in PMX4UE Git.",
   "files": [
     {
+      "source": "Tools/MMDPipeline/framework/blender_audit_fbx_bind_pose.py",
+      "destination": "tools/legacy/blender_audit_fbx_bind_pose.py",
+      "source_sha256": "5dc0e2a583550a844ac354d07195912272a225e68384446a61e5038d9eef386b"
+    },
+    {
       "source": "Tools/MMDPipeline/framework/mmd2ue_core.py",
       "destination": "tools/legacy/mmd2ue_core.py",
       "source_sha256": "c74cc46c08f4687030b47b85c9d07539a31b435f0058983c5c846c7d7f3bfdde"

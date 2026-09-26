@@ -24,7 +24,9 @@ def make_plan(inventory, profile, mesh):
     require(profile.get("reviewed") is True, "Profile requires mapping/partition review")
     settings = resolve_settings(profile)
     require(profile["source_sha256"] == inventory["source_sha256"], "PMX fingerprint changed; review selectors again")
-    require(mesh.get("status") == "inspected" and mesh["mesh"] == profile["mesh"], "Wrong UE mesh inspection")
+    require(mesh.get("status") == "inspected" and mesh["mesh"].split(".")[0] == profile["mesh"].split(".")[0], "Wrong UE mesh inspection")
+    require(isinstance(profile.get("test_animation"), str) and profile["test_animation"].startswith("/Game/"),
+            "A real target-skeleton test animation is required; PMX alone does not contain motion")
     require(profile.get("cross_partition_collision") == "none", "Only explicitly independent partitions are supported; use special-requirements prompt")
     require(profile.get("cross_partition_reason"), "Document why cross-partition collisions are disabled")
     variant = profile["variant"]

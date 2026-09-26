@@ -32,7 +32,7 @@ TEXTURE_EXTENSIONS = {
 }
 CHARACTER_ID_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{1,63}$")
 
-PROFILE_PRESETS_PATH = "Tools/MMDPipeline/framework/profiles/material_profile_presets.v1.json"
+PROFILE_PRESETS_PATH = str(Path(__file__).resolve().parents[2] / "presets/materials.v1.json")
 
 
 @dataclass(frozen=True)
@@ -546,7 +546,7 @@ def build_character_asset_names(config: dict, project_root: Path | None = None) 
         "rim_asset": f"M_MMD_{character_id}_DepthRim",
         "instance_prefix": f"MI_{character_id}",
         "artifact_dir": str(artifact),
-        "fbx": str(artifact / f"{character_id}.fbx"),
+        "fbx": str(resolve_path(project_root or Path.cwd(), paths["fbx"])) if paths.get("fbx") else str(artifact / f"{character_id}.fbx"),
         "manifest": str(artifact / "blender_manifest.json"),
         "material_map": str(material_map),
         "face_sdf": str(artifact / "SDF" / "final" / f"T_{character_id}_FaceSDF_RGBA.png"),

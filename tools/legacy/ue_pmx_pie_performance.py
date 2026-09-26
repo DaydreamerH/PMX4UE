@@ -20,17 +20,9 @@ import unreal
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from pmx_physics_settings import performance_verdict
 
-base = "/Game/Characters/TololoSchool1001/PhysicsSandbox/"
-mesh_path = base + "SK_TololoSchool1001_UpperOnlyCm_v1"
-paths = {
-    "Sync8": base + "Performance/Perf_v2/ABP_Nonlinear8_60_Walk",
-    "Deferred8": base + "Performance/Perf_v3/ABP_Deferred8_60_Walk",
-    "Deferred6": base + "Performance/Perf_v3/ABP_Deferred6_60_Walk",
-    "NoPhysics": base + "Performance/Perf_v1/ABP_NoPhysics_Walk",
-}
-names = os.environ.get("PMX_PIE_CASES", "Sync8,Deferred8,Deferred6,NoPhysics").split(",")
-cases = [(name, paths[name]) for _ in range(int(os.environ.get("PMX_PIE_REPEATS", "1"))) for name in names]
 plan_path = os.environ.get("PMX_PHYSICS_PLAN")
+if not plan_path:
+    raise RuntimeError("PMX_PHYSICS_PLAN is required; no character-specific fallback")
 plan = None
 fingerprint = None
 if plan_path:

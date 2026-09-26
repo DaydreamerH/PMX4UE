@@ -74,7 +74,7 @@ def import_one(filename: Path, destination: str, options=None, destination_name:
     task.filename = str(filename)
     task.destination_path = destination
     task.automated = True
-    task.replace_existing = True
+    task.replace_existing = False
     task.save = True
     if destination_name:
         safe_set(task, "destination_name", destination_name)
@@ -440,6 +440,9 @@ class BuildContext:
         safe_set(options, "mesh_type_to_import", unreal.FBXImportType.FBXIT_SKELETAL_MESH)
         skeletal = getattr(options, "skeletal_mesh_import_data", None)
         if skeletal:
+            for name, value in (("import_uniform_scale", 1.0), ("convert_scene_unit", False)):
+                if not safe_set(skeletal, name, value):
+                    raise BuildError(f"Cannot enforce centimeter import contract: {name}")
             for name, value in (
                 ("import_morph_targets", True),
                 ("preserve_smoothing_groups", True),

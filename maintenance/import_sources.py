@@ -8,7 +8,7 @@ import json
 import subprocess
 from pathlib import Path
 
-FILES = '''mmd2ue_core.py mmd2ue.py blender_fbx_units.py blender_skeleton_audit.py
+FILES = '''mmd2ue_core.py mmd2ue.py blender_fbx_units.py blender_skeleton_audit.py blender_audit_fbx_bind_pose.py
 skeleton_review.py skeleton_plan.py skeleton_ue_mapping.py blender_apply_skeleton_plan.py
 blender_face_sdf.py ue_context.py ue_build_character.py ue_master_material.py
 ue_material_instances.py ue_preview.py ue_apply_features.py ue_feature_outline.py

@@ -18,7 +18,8 @@ import bpy
 import addon_utils
 from mathutils import Vector
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from framework.blender_fbx_units import (
+sys.path.insert(0, str(Path(__file__).resolve().parent / "legacy"))
+from blender_fbx_units import (
     assert_cm_native_contract, audit_fbx_units, prepare_cm_native_scene,
 )
 

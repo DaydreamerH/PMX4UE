@@ -38,6 +38,14 @@ def fixture():
 
 
 class PhysicsPlanTests(unittest.TestCase):
+    def test_ue_object_path_matches_package_path(self):
+        args = fixture()
+        args[2]["mesh"] += ".SK_Test"
+        self.assertEqual(make_plan(*args)["status"], "ready")
+
+    def test_missing_animation_is_not_ready(self):
+        self.reject(lambda i,p,m: p.update(test_animation=""), "test animation")
+
     def test_masks_are_symmetric_not_different_group_heuristic(self):
         a, b = dict(group=2, mask=64), dict(group=6, mask=4)
         self.assertTrue(permits(a, b))

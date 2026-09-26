@@ -8,7 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from mmd_tools.core import pmx
-from blender_pmx_skirt_experiment import point, rotation
+from pmx_coordinates import point, rotation
 
 
 def main():
