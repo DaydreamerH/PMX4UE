@@ -1,0 +1,427 @@
+{
+  "schema": "mmd2ue.material-profiles.v1",
+  "purpose": "Starting scalar/vector ranges for any PMX. Values are art-directable defaults, not final per-character tuning.",
+  "note": "Scales are consumed by M_MMD_*_Master and its instances. Family identity is expressed only through these parameters; the node graph is character independent.",
+  "profiles": {
+    "face_skin": {
+      "lighting": "face_sdf_or_smooth_npr",
+      "scalars": {
+        "NormalStrength": 0.0, "NPRNormalMapInfluence": 0.0, "UseRMO": 0.0,
+        "RoughnessFallback": 0.7, "MetallicFallback": 0.0, "Specular": 0.025,
+        "BaseColorContrast": 0.0, "AlphaScale": 1.0, "AmbientLift": 0.002,
+        "EyeGlow": 0.0, "HairHighlightStrength": 0.0, "RimStrength": 0.004,
+        "ShadowLevel": 0.58, "MidLevel": 0.92, "ToonShadowThreshold": 0.5,
+        "ToonLightThreshold": 0.73, "ToonRampStrength": 0.015, "SpecularPower": 56.0,
+        "OutputGain": 0.68, "PBRBlend": 0.0, "ToonBandStrength": 0.0,
+        "ToonBandSoftness": 0.16, "NormalWarpStrength": 0.94, "NPRSpecularStrength": 0.0,
+        "FaceMode": 1.0, "FaceShadowSmoothness": 0.045, "FaceSpecSmoothness": 0.015,
+        "FaceSDFSpecularStrength": 0.0, "FaceSDFUseUV1": 0.0, "FaceSDFFlipV": 0.0,
+        "FaceSDFDebugR": 0.0, "FaceSDFDebugA": 0.0, "FaceSDFDebugShadow": 0.0,
+        "StockingMode": 0.0, "HairMode": 0.0, "AOInfluence": 0.0
+      },
+      "vectors": {
+        "Tint": [0.92, 0.75, 0.59, 1.0], "ShadowTint": [0.84, 0.62, 0.5, 1.0],
+        "RimTint": [1.0, 0.42, 0.32, 1.0], "HairHighlightTint": [0.9, 0.96, 1.0, 1.0],
+        "NormalSphereOffset": [0.0, 0.0, 65.0, 0.0], "FaceForwardWS": [0.0, 1.0, 0.0, 0.0],
+        "FaceLeftWS": [1.0, 0.0, 0.0, 0.0], "FaceSDFSpecularTint": [1.0, 0.72, 0.62, 1.0]
+      }
+    },
+    "facial_detail": {
+      "lighting": "unlit_or_low_energy",
+      "scalars": {
+        "NormalStrength": 0.0, "UseRMO": 0.0, "RoughnessFallback": 0.5,
+        "MetallicFallback": 0.0, "Specular": 0.04, "BaseColorContrast": 0.24,
+        "AlphaScale": 1.0, "AmbientLift": 0.001, "EyeGlow": 0.0,
+        "HairHighlightStrength": 0.0, "RimStrength": 0.004, "ShadowLevel": 0.7,
+        "MidLevel": 0.9, "ToonRampStrength": 0.02, "OutputGain": 0.66,
+        "PBRBlend": 0.05, "ToonBandStrength": 0.0, "ToonBandSoftness": 0.14,
+        "NormalWarpStrength": 0.92, "NPRSpecularStrength": 0.0
+      },
+      "vectors": {
+        "Tint": [0.9, 0.82, 0.82, 1.0], "ShadowTint": [0.72, 0.56, 0.6, 1.0],
+        "RimTint": [0.42, 0.55, 0.82, 1.0], "HairHighlightTint": [0.9, 0.96, 1.0, 1.0],
+        "NormalSphereOffset": [0.0, 0.0, 65.0, 0.0]
+      }
+    },
+    "mouth": {
+      "lighting": "low_energy",
+      "scalars": {
+        "NormalStrength": 0.0, "UseRMO": 0.0, "RoughnessFallback": 0.46,
+        "MetallicFallback": 0.0, "Specular": 0.22, "BaseColorContrast": 0.05,
+        "AlphaScale": 1.0, "AmbientLift": 0.01, "EyeGlow": 0.0,
+        "HairHighlightStrength": 0.0, "RimStrength": 0.012, "ShadowLevel": 0.42,
+        "MidLevel": 0.7, "OutputGain": 0.82, "PBRBlend": 0.1
+      },
+      "vectors": {
+        "Tint": [1.0, 1.0, 1.0, 1.0], "ShadowTint": [0.78, 0.4, 0.44, 1.0],
+        "RimTint": [0.42, 0.55, 0.82, 1.0], "HairHighlightTint": [0.9, 0.96, 1.0, 1.0]
+      }
+    },
+    "teeth": {
+      "lighting": "low_energy",
+      "scalars": {
+        "NormalStrength": 0.0, "UseRMO": 0.0, "RoughnessFallback": 0.28,
+        "MetallicFallback": 0.0, "Specular": 0.38, "BaseColorContrast": 0.02,
+        "AlphaScale": 1.0, "AmbientLift": 0.012, "EyeGlow": 0.0,
+        "HairHighlightStrength": 0.0, "RimStrength": 0.012, "ShadowLevel": 0.62,
+        "MidLevel": 0.86, "OutputGain": 0.82, "PBRBlend": 0.35
+      },
+      "vectors": {
+        "Tint": [1.0, 1.0, 1.0, 1.0], "ShadowTint": [0.75, 0.8, 0.9, 1.0],
+        "RimTint": [0.42, 0.55, 0.82, 1.0], "HairHighlightTint": [0.9, 0.96, 1.0, 1.0]
+      }
+    },
+    "eye_white": {
+      "lighting": "pbr_low_energy",
+      "scalars": {
+        "NormalStrength": 0.0, "UseRMO": 0.0, "RoughnessFallback": 0.3,
+        "MetallicFallback": 0.0, "Specular": 0.36, "BaseColorContrast": 0.04,
+        "AlphaScale": 1.0, "AmbientLift": 0.008, "EyeGlow": 0.0,
+        "HairHighlightStrength": 0.0, "RimStrength": 0.015, "ShadowLevel": 0.58,
+        "MidLevel": 0.84, "OutputGain": 0.82, "PBRBlend": 0.3
+      },
+      "vectors": {
+        "Tint": [1.0, 1.0, 1.0, 1.0], "ShadowTint": [0.7, 0.76, 0.88, 1.0],
+        "RimTint": [0.42, 0.55, 0.82, 1.0], "HairHighlightTint": [0.9, 0.96, 1.0, 1.0]
+      }
+    },
+    "iris": {
+      "lighting": "layered_or_stylized",
+      "scalars": {
+        "NormalStrength": 0.0, "UseRMO": 0.0, "RoughnessFallback": 0.16,
+        "MetallicFallback": 0.0, "Specular": 0.36, "BaseColorContrast": 0.12,
+        "AlphaScale": 1.0, "AmbientLift": 0.01, "EyeGlow": 0.04,
+        "HairHighlightStrength": 0.0, "RimStrength": 0.024, "ShadowLevel": 0.48,
+        "MidLevel": 0.78, "ToonRampStrength": 0.08, "SpecularPower": 90.0,
+        "OutputGain": 0.9, "PBRBlend": 0.2
+      },
+      "vectors": {
+        "Tint": [1.08, 0.9, 0.92, 1.0], "ShadowTint": [0.52, 0.2, 0.28, 1.0],
+        "RimTint": [1.0, 0.25, 0.3, 1.0], "HairHighlightTint": [0.9, 0.96, 1.0, 1.0]
+      }
+    },
+    "eye_overlay": {
+      "lighting": "layered",
+      "scalars": {
+        "NormalStrength": 0.0, "UseRMO": 0.0, "RoughnessFallback": 0.24,
+        "MetallicFallback": 0.0, "Specular": 0.45, "BaseColorContrast": 0.08,
+        "AlphaScale": 1.0, "AmbientLift": 0.008, "EyeGlow": 0.03,
+        "HairHighlightStrength": 0.0, "RimStrength": 0.018, "ShadowLevel": 0.5,
+        "MidLevel": 0.8, "OutputGain": 0.88, "PBRBlend": 0.1, "EyeOverlayStrength": 1.0
+      },
+      "vectors": {
+        "Tint": [1.0, 1.0, 1.0, 1.0], "ShadowTint": [0.65, 0.35, 0.45, 1.0],
+        "RimTint": [0.42, 0.55, 0.82, 1.0], "HairHighlightTint": [0.9, 0.96, 1.0, 1.0]
+      }
+    },
+    "hair": {
+      "lighting": "npr_shape_plus_authored_highlight",
+      "scalars": {
+        "NormalStrength": 0.0, "NPRNormalMapInfluence": 0.0, "UseRMO": 0.0,
+        "RoughnessFallback": 0.54, "MetallicFallback": 0.0, "Specular": 0.06,
+        "BaseColorContrast": 0.06, "AlphaScale": 1.0, "AmbientLift": 0.002,
+        "EyeGlow": 0.0, "HairHighlightStrength": 0.1, "RimStrength": 0.006,
+        "ShadowLevel": 0.58, "MidLevel": 0.82, "ToonRampStrength": 0.035,
+        "HairMode": 1.0, "HairSpecPower": 6.0, "HairSpecMinIntensity": 0.1,
+        "HairSpecOffsetSpeed": 0.05, "HairSpecOffset": 0.0, "RimThreshold": 0.84,
+        "OutputGain": 0.72, "PBRBlend": 0.18, "ToonBandStrength": 0.04,
+        "ToonBandSoftness": 0.14, "NormalWarpStrength": 0.88, "NPRSpecularStrength": 0.7,
+        "StockingMode": 0.0, "AOInfluence": 0.0
+      },
+      "vectors": {
+        "Tint": [0.7, 0.76, 0.9, 1.0], "ShadowTint": [0.58, 0.62, 0.78, 1.0],
+        "RimTint": [0.55, 0.68, 1.0, 1.0], "HairHighlightTint": [0.68, 0.72, 0.84, 1.0],
+        "NormalSphereOffset": [0.0, 0.0, 65.0, 0.0]
+      }
+    },
+    "nails": {
+      "lighting": "low_energy",
+      "scalars": {
+        "NormalStrength": 0.0, "UseRMO": 0.0, "RoughnessFallback": 0.3,
+        "MetallicFallback": 0.0, "Specular": 0.46, "BaseColorContrast": 0.1,
+        "AlphaScale": 1.0, "AmbientLift": 0.006, "EyeGlow": 0.0,
+        "HairHighlightStrength": 0.0, "RimStrength": 0.018, "ShadowLevel": 0.5,
+        "MidLevel": 0.78, "OutputGain": 0.84, "PBRBlend": 0.55
+      },
+      "vectors": {
+        "Tint": [1.0, 1.0, 1.0, 1.0], "ShadowTint": [0.9, 0.65, 0.68, 1.0],
+        "RimTint": [0.42, 0.55, 0.82, 1.0], "HairHighlightTint": [0.9, 0.96, 1.0, 1.0]
+      }
+    },
+    "body_skin": {
+      "lighting": "stylized_pbr",
+      "scalars": {
+        "NormalStrength": 0.18, "NPRNormalMapInfluence": 0.45, "UseRMO": 1.0,
+        "RoughnessFallback": 0.62, "MetallicFallback": 0.0, "Specular": 0.1,
+        "BaseColorContrast": 0.02, "AlphaScale": 1.0, "AmbientLift": 0.002,
+        "EyeGlow": 0.0, "HairHighlightStrength": 0.0, "RimStrength": 0.006,
+        "ShadowLevel": 0.7, "MidLevel": 0.88, "ToonRampStrength": 0.03,
+        "SpecularPower": 48.0, "OutputGain": 0.6, "PBRBlend": 0.52,
+        "ToonBandStrength": 0.04, "ToonBandSoftness": 0.12, "NormalWarpStrength": 0.2,
+        "NPRSpecularStrength": 0.01, "AOInfluence": 0.2, "StockingMode": 0.0, "HairMode": 0.0
+      },
+      "vectors": {
+        "Tint": [0.88, 0.74, 0.7, 1.0], "ShadowTint": [0.9, 0.7, 0.62, 1.0],
+        "RimTint": [1.0, 0.42, 0.32, 1.0], "HairHighlightTint": [0.9, 0.96, 1.0, 1.0]
+      }
+    },
+    "cloth": {
+      "lighting": "stylized_pbr",
+      "scalars": {
+        "NormalStrength": 0.5, "NPRNormalMapInfluence": 0.0, "UseRMO": 1.0,
+        "RoughnessFallback": 0.52, "MetallicFallback": 0.0, "Specular": 0.32,
+        "BaseColorContrast": 0.12, "AlphaScale": 1.0, "AmbientLift": 0.0,
+        "EyeGlow": 0.0, "HairHighlightStrength": 0.0, "RimStrength": 0.002,
+        "ShadowLevel": 0.7, "MidLevel": 0.88, "ToonRampStrength": 0.02,
+        "SpecularPower": 44.0, "OutputGain": 0.5, "PBRBlend": 0.97,
+        "AOInfluence": 0.25, "StockingMode": 0.0, "ToonBandStrength": 0.0,
+        "ToonBandSoftness": 0.14, "NormalWarpStrength": 0.0, "NPRSpecularStrength": 0.0
+      },
+      "vectors": {
+        "Tint": [0.88, 0.9, 0.94, 1.0], "ShadowTint": [0.56, 0.61, 0.74, 1.0],
+        "RimTint": [0.42, 0.55, 0.82, 1.0], "HairHighlightTint": [0.9, 0.96, 1.0, 1.0]
+      }
+    },
+    "white_cloth": {
+      "lighting": "stylized_pbr",
+      "scalars": {
+        "NormalStrength": 0.45, "NPRNormalMapInfluence": 0.0, "UseRMO": 1.0,
+        "RoughnessFallback": 0.68, "MetallicFallback": 0.0, "Specular": 0.25,
+        "BaseColorContrast": 0.06, "AlphaScale": 1.0, "AmbientLift": 0.0,
+        "EyeGlow": 0.0, "HairHighlightStrength": 0.0, "RimStrength": 0.002,
+        "ShadowLevel": 0.74, "MidLevel": 0.9, "ToonRampStrength": 0.015,
+        "SpecularPower": 42.0, "OutputGain": 0.48, "PBRBlend": 0.98,
+        "AOInfluence": 0.22, "StockingMode": 0.0, "ToonBandStrength": 0.0,
+        "ToonBandSoftness": 0.15, "NormalWarpStrength": 0.0, "NPRSpecularStrength": 0.0
+      },
+      "vectors": {
+        "Tint": [0.74, 0.77, 0.84, 1.0], "ShadowTint": [0.6, 0.66, 0.76, 1.0],
+        "RimTint": [0.42, 0.55, 0.82, 1.0], "HairHighlightTint": [0.9, 0.96, 1.0, 1.0]
+      }
+    },
+    "dark_cloth": {
+      "lighting": "stylized_pbr",
+      "scalars": {
+        "NormalStrength": 0.55, "NPRNormalMapInfluence": 0.0, "UseRMO": 1.0,
+        "RoughnessFallback": 0.55, "MetallicFallback": 0.0, "Specular": 0.32,
+        "BaseColorContrast": 0.16, "AlphaScale": 1.0, "AmbientLift": 0.0,
+        "EyeGlow": 0.0, "HairHighlightStrength": 0.0, "RimStrength": 0.002,
+        "ShadowLevel": 0.66, "MidLevel": 0.86, "ToonRampStrength": 0.02,
+        "SpecularPower": 48.0, "OutputGain": 0.48, "PBRBlend": 0.97,
+        "AOInfluence": 0.28, "StockingMode": 0.0, "ToonBandStrength": 0.0,
+        "ToonBandSoftness": 0.14, "NormalWarpStrength": 0.0, "NPRSpecularStrength": 0.0
+      },
+      "vectors": {
+        "Tint": [0.82, 0.84, 0.88, 1.0], "ShadowTint": [0.46, 0.49, 0.62, 1.0],
+        "RimTint": [0.42, 0.55, 0.82, 1.0], "HairHighlightTint": [0.9, 0.96, 1.0, 1.0]
+      }
+    },
+    "soft_fabric": {
+      "lighting": "stylized_pbr",
+      "scalars": {
+        "NormalStrength": 0.5, "NPRNormalMapInfluence": 0.0, "UseRMO": 1.0,
+        "RoughnessFallback": 0.62, "MetallicFallback": 0.0, "Specular": 0.22,
+        "BaseColorContrast": 0.08, "AlphaScale": 1.0, "AmbientLift": 0.0,
+        "EyeGlow": 0.0, "HairHighlightStrength": 0.0, "RimStrength": 0.002,
+        "ShadowLevel": 0.72, "MidLevel": 0.9, "ToonRampStrength": 0.02,
+        "SpecularPower": 40.0, "OutputGain": 0.48, "PBRBlend": 0.975,
+        "AOInfluence": 0.26, "StockingMode": 0.0, "ToonBandStrength": 0.0,
+        "NormalWarpStrength": 0.0, "NPRSpecularStrength": 0.0
+      },
+      "vectors": {
+        "Tint": [0.92, 0.93, 0.96, 1.0], "ShadowTint": [0.58, 0.62, 0.72, 1.0],
+        "RimTint": [0.6, 0.7, 0.9, 1.0], "HairHighlightTint": [0.9, 0.96, 1.0, 1.0]
+      }
+    },
+    "heavy_fabric": {
+      "lighting": "stylized_pbr",
+      "scalars": {
+        "NormalStrength": 0.62, "NPRNormalMapInfluence": 0.0, "UseRMO": 1.0,
+        "RoughnessFallback": 0.6, "MetallicFallback": 0.0, "Specular": 0.3,
+        "BaseColorContrast": 0.12, "AlphaScale": 1.0, "AmbientLift": 0.0,
+        "EyeGlow": 0.0, "HairHighlightStrength": 0.0, "RimStrength": 0.001,
+        "ShadowLevel": 0.68, "MidLevel": 0.88, "ToonRampStrength": 0.015,
+        "SpecularPower": 52.0, "OutputGain": 0.44, "PBRBlend": 0.985,
+        "AOInfluence": 0.32, "StockingMode": 0.0, "ToonBandStrength": 0.0,
+        "NormalWarpStrength": 0.0, "NPRSpecularStrength": 0.0
+      },
+      "vectors": {
+        "Tint": [0.86, 0.86, 0.9, 1.0], "ShadowTint": [0.5, 0.52, 0.6, 1.0],
+        "RimTint": [0.62, 0.7, 0.88, 1.0], "HairHighlightTint": [0.9, 0.96, 1.0, 1.0]
+      }
+    },
+    "leather": {
+      "lighting": "stylized_pbr",
+      "scalars": {
+        "NormalStrength": 0.65, "NPRNormalMapInfluence": 0.0, "UseRMO": 1.0,
+        "RoughnessFallback": 0.3, "MetallicFallback": 0.0, "Specular": 0.5,
+        "BaseColorContrast": 0.14, "AlphaScale": 1.0, "AmbientLift": 0.0,
+        "EyeGlow": 0.0, "HairHighlightStrength": 0.0, "RimStrength": 0.002,
+        "ShadowLevel": 0.68, "MidLevel": 0.88, "ToonRampStrength": 0.01,
+        "SpecularPower": 72.0, "OutputGain": 0.42, "PBRBlend": 0.99,
+        "AOInfluence": 0.35, "StockingMode": 0.0, "ToonBandStrength": 0.0,
+        "NormalWarpStrength": 0.0, "NPRSpecularStrength": 0.0
+      },
+      "vectors": {
+        "Tint": [0.78, 0.8, 0.86, 1.0], "ShadowTint": [0.4, 0.43, 0.54, 1.0],
+        "RimTint": [0.42, 0.55, 0.82, 1.0], "HairHighlightTint": [0.9, 0.96, 1.0, 1.0]
+      }
+    },
+    "hard_surface": {
+      "lighting": "pbr",
+      "scalars": {
+        "NormalStrength": 0.9, "NPRNormalMapInfluence": 0.0, "UseRMO": 1.0,
+        "RoughnessFallback": 0.38, "MetallicFallback": 0.45, "Specular": 0.42,
+        "BaseColorContrast": 0.04, "AlphaScale": 1.0, "AmbientLift": 0.0,
+        "EyeGlow": 0.0, "HairHighlightStrength": 0.0, "RimStrength": 0.001,
+        "ShadowLevel": 0.7, "MidLevel": 0.9, "ToonRampStrength": 0.0,
+        "SpecularPower": 64.0, "OutputGain": 0.38, "PBRBlend": 0.995,
+        "AOInfluence": 0.5, "StockingMode": 0.0, "ToonBandStrength": 0.0,
+        "NormalWarpStrength": 0.0, "NPRSpecularStrength": 0.0
+      },
+      "vectors": {
+        "Tint": [1.0, 1.0, 1.0, 1.0], "ShadowTint": [0.48, 0.5, 0.54, 1.0],
+        "RimTint": [0.8, 0.84, 0.9, 1.0], "HairHighlightTint": [0.9, 0.96, 1.0, 1.0]
+      }
+    },
+    "metal": {
+      "lighting": "pbr",
+      "scalars": {
+        "NormalStrength": 0.82, "NPRNormalMapInfluence": 0.0, "UseRMO": 1.0,
+        "RoughnessFallback": 0.28, "MetallicFallback": 0.75, "Specular": 0.5,
+        "BaseColorContrast": 0.03, "AlphaScale": 1.0, "AmbientLift": 0.0,
+        "EyeGlow": 0.0, "HairHighlightStrength": 0.0, "RimStrength": 0.001,
+        "ShadowLevel": 0.7, "MidLevel": 0.9, "ToonRampStrength": 0.0,
+        "SpecularPower": 72.0, "OutputGain": 0.36, "PBRBlend": 0.995,
+        "AOInfluence": 0.45, "StockingMode": 0.0, "ToonBandStrength": 0.0,
+        "NormalWarpStrength": 0.0, "NPRSpecularStrength": 0.0
+      },
+      "vectors": {
+        "Tint": [1.0, 1.0, 1.0, 1.0], "ShadowTint": [0.46, 0.48, 0.52, 1.0],
+        "RimTint": [0.82, 0.86, 0.94, 1.0], "HairHighlightTint": [0.9, 0.96, 1.0, 1.0]
+      }
+    },
+    "gem": {
+      "lighting": "pbr",
+      "scalars": {
+        "NormalStrength": 0.7, "NPRNormalMapInfluence": 0.0, "UseRMO": 1.0,
+        "RoughnessFallback": 0.1, "MetallicFallback": 0.15, "Specular": 0.72,
+        "BaseColorContrast": 0.08, "AlphaScale": 1.0, "AmbientLift": 0.002,
+        "EyeGlow": 0.02, "HairHighlightStrength": 0.0, "RimStrength": 0.018,
+        "ShadowLevel": 0.65, "MidLevel": 0.9, "ToonRampStrength": 0.0,
+        "SpecularPower": 96.0, "OutputGain": 0.44, "PBRBlend": 0.92,
+        "AOInfluence": 0.18, "StockingMode": 0.0, "ToonBandStrength": 0.0,
+        "NormalWarpStrength": 0.0, "NPRSpecularStrength": 0.08
+      },
+      "vectors": {
+        "Tint": [1.0, 1.0, 1.0, 1.0], "ShadowTint": [0.42, 0.52, 0.58, 1.0],
+        "RimTint": [0.68, 0.92, 1.0, 1.0], "HairHighlightTint": [0.9, 0.96, 1.0, 1.0]
+      }
+    },
+    "stocking": {
+      "lighting": "pbr_anisotropic_optional",
+      "scalars": {
+        "NormalStrength": 0.55, "NPRNormalMapInfluence": 0.0, "UseRMO": 1.0,
+        "RoughnessFallback": 0.48, "StockingRoughnessScale": 0.72, "MetallicFallback": 0.0,
+        "Specular": 0.6, "BaseColorContrast": 0.04, "AlphaScale": 1.0,
+        "AmbientLift": 0.0, "EyeGlow": 0.0, "HairHighlightStrength": 0.0,
+        "RimStrength": 0.001, "ShadowLevel": 0.72, "MidLevel": 0.9,
+        "ToonRampStrength": 0.0, "SpecularPower": 58.0, "OutputGain": 0.38,
+        "PBRBlend": 0.98, "AOInfluence": 0.08, "StockingMode": 1.0,
+        "StockingAnisotropy": 0.45, "StockingEdgeRange": 1.8, "StockingEdgeIntensity": 0.68,
+        "StockingEdgeNormalMapInfluence": 0.25, "ToonBandStrength": 0.0,
+        "ToonBandSoftness": 0.18, "NormalWarpStrength": 0.0, "NPRSpecularStrength": 0.0
+      },
+      "vectors": {
+        "Tint": [0.34, 0.26, 0.3, 1.0], "ShadowTint": [0.24, 0.18, 0.23, 1.0],
+        "RimTint": [0.42, 0.55, 0.82, 1.0], "HairHighlightTint": [0.9, 0.96, 1.0, 1.0],
+        "StockingEdgeTint": [0.12, 0.065, 0.09, 1.0], "StockingFiberDirectionLocal": [0.0, 0.0, 1.0, 0.0]
+      }
+    },
+    "glass": {
+      "lighting": "translucent",
+      "scalars": { "GlassOpacity": 0.18, "RoughnessFallback": 0.08, "Specular": 0.72 },
+      "vectors": { "Tint": [0.18, 0.23, 0.24, 1.0] }
+    },
+    "emotion": {
+      "lighting": "unlit",
+      "scalars": {
+        "NormalStrength": 0.0, "UseRMO": 0.0, "RoughnessFallback": 0.5,
+        "MetallicFallback": 0.0, "Specular": 0.0, "BaseColorContrast": 0.05,
+        "AlphaScale": 1.0, "AmbientLift": 0.0, "EyeGlow": 0.0,
+        "HairHighlightStrength": 0.0, "RimStrength": 0.0, "ShadowLevel": 1.0,
+        "MidLevel": 1.0, "ToonRampStrength": 0.0, "OutputGain": 0.85,
+        "PBRBlend": 0.0, "StockingMode": 0.0
+      },
+      "vectors": {
+        "Tint": [1.0, 1.0, 1.0, 1.0], "ShadowTint": [1.0, 1.0, 1.0, 1.0],
+        "RimTint": [0.42, 0.55, 0.82, 1.0], "HairHighlightTint": [0.9, 0.96, 1.0, 1.0]
+      }
+    },
+    "hidden": {
+      "lighting": "invisible",
+      "scalars": { "AlphaScale": 0.0, "PBRBlend": 0.0, "OutputGain": 0.0, "ShadowLevel": 1.0, "MidLevel": 1.0 },
+      "vectors": { "Tint": [1.0, 1.0, 1.0, 1.0], "ShadowTint": [1.0, 1.0, 1.0, 1.0] }
+    },
+    "effect": {
+      "lighting": "additive_unlit",
+      "scalars": { "AlphaScale": 1.0, "EyeOverlayStrength": 1.0 },
+      "vectors": { "Tint": [1.0, 1.0, 1.0, 1.0] }
+    },
+    "weapon": {
+      "lighting": "pbr",
+      "scalars": {
+        "NormalStrength": 0.85, "NPRNormalMapInfluence": 0.0, "UseRMO": 1.0,
+        "RoughnessFallback": 0.34, "MetallicFallback": 0.55, "Specular": 0.45,
+        "BaseColorContrast": 0.05, "AlphaScale": 1.0, "AmbientLift": 0.0,
+        "RimStrength": 0.001, "ShadowLevel": 0.7, "MidLevel": 0.9,
+        "OutputGain": 0.38, "PBRBlend": 0.995, "AOInfluence": 0.45,
+        "ToonBandStrength": 0.0, "NormalWarpStrength": 0.0
+      },
+      "vectors": {
+        "Tint": [1.0, 1.0, 1.0, 1.0], "ShadowTint": [0.46, 0.48, 0.52, 1.0],
+        "RimTint": [0.82, 0.86, 0.94, 1.0], "HairHighlightTint": [0.9, 0.96, 1.0, 1.0]
+      }
+    },
+    "wood": {
+      "lighting": "pbr",
+      "scalars": {
+        "NormalStrength": 0.6, "UseRMO": 1.0, "RoughnessFallback": 0.55,
+        "MetallicFallback": 0.0, "Specular": 0.25, "BaseColorContrast": 0.1,
+        "AlphaScale": 1.0, "ShadowLevel": 0.72, "MidLevel": 0.9,
+        "OutputGain": 0.44, "PBRBlend": 0.98, "AOInfluence": 0.35, "NormalWarpStrength": 0.0
+      },
+      "vectors": {
+        "Tint": [1.0, 1.0, 1.0, 1.0], "ShadowTint": [0.58, 0.5, 0.42, 1.0],
+        "RimTint": [0.8, 0.84, 0.9, 1.0], "HairHighlightTint": [0.9, 0.96, 1.0, 1.0]
+      }
+    },
+    "rubber": {
+      "lighting": "pbr",
+      "scalars": {
+        "NormalStrength": 0.5, "UseRMO": 1.0, "RoughnessFallback": 0.42,
+        "MetallicFallback": 0.0, "Specular": 0.4, "BaseColorContrast": 0.06,
+        "AlphaScale": 1.0, "ShadowLevel": 0.7, "MidLevel": 0.9,
+        "OutputGain": 0.42, "PBRBlend": 0.99, "AOInfluence": 0.3, "NormalWarpStrength": 0.0
+      },
+      "vectors": {
+        "Tint": [1.0, 1.0, 1.0, 1.0], "ShadowTint": [0.4, 0.42, 0.45, 1.0],
+        "RimTint": [0.8, 0.84, 0.9, 1.0], "HairHighlightTint": [0.9, 0.96, 1.0, 1.0]
+      }
+    },
+    "fabric_trim": {
+      "lighting": "stylized_pbr",
+      "scalars": {
+        "NormalStrength": 0.45, "UseRMO": 1.0, "RoughnessFallback": 0.58,
+        "MetallicFallback": 0.0, "Specular": 0.2, "BaseColorContrast": 0.08,
+        "AlphaScale": 1.0, "ShadowLevel": 0.72, "MidLevel": 0.9,
+        "OutputGain": 0.46, "PBRBlend": 0.98, "AOInfluence": 0.24,
+        "ToonBandStrength": 0.0, "NormalWarpStrength": 0.0
+      },
+      "vectors": {
+        "Tint": [0.94, 0.94, 0.97, 1.0], "ShadowTint": [0.56, 0.6, 0.7, 1.0],
+        "RimTint": [0.6, 0.7, 0.9, 1.0], "HairHighlightTint": [0.9, 0.96, 1.0, 1.0]
+      }
+    }
+  }
+}

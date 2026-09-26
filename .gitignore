@@ -1,0 +1,9 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.local/
+runs/
+unreal/**/Binaries/
+unreal/**/Intermediate/
+*.log
+characters/*/local.json

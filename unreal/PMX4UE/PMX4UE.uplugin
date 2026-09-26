@@ -1,0 +1,20 @@
+{
+  "FileVersion": 3,
+  "Version": 1,
+  "VersionName": "0.1.0",
+  "FriendlyName": "PMX4UE",
+  "Description": "Agent-guided PMX character conversion tools and native rigid-body collision filtering.",
+  "Category": "Animation",
+  "CanContainContent": false,
+  "EnabledByDefault": true,
+  "Modules": [
+    {"Name": "PMX4UE", "Type": "Runtime", "LoadingPhase": "Default"},
+    {"Name": "PMX4UEEditor", "Type": "Editor", "LoadingPhase": "Default"}
+  ],
+  "Plugins": [
+    {"Name": "PythonScriptPlugin", "Enabled": true, "TargetAllowList": ["Editor"]},
+    {"Name": "EditorScriptingUtilities", "Enabled": true, "TargetAllowList": ["Editor"]},
+    {"Name": "IKRig", "Enabled": true},
+    {"Name": "AutomationUtils", "Enabled": true, "TargetAllowList": ["Editor"]}
+  ]
+}

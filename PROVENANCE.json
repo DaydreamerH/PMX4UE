@@ -1,0 +1,211 @@
+{
+  "source_commit": "26479c410f17f43afcd25d0d1b6568a513ed7406",
+  "note": "Copied from working tree; source hashes identify exact bytes, including pre-existing changes. Subsequent adaptations tracked in PMX4UE Git.",
+  "files": [
+    {
+      "source": "Tools/MMDPipeline/framework/mmd2ue_core.py",
+      "destination": "tools/legacy/mmd2ue_core.py",
+      "source_sha256": "c74cc46c08f4687030b47b85c9d07539a31b435f0058983c5c846c7d7f3bfdde"
+    },
+    {
+      "source": "Tools/MMDPipeline/framework/mmd2ue.py",
+      "destination": "tools/legacy/mmd2ue.py",
+      "source_sha256": "02a91efb4941e8d82528816593c632802b69a109329d34c8536f4fda30c78718"
+    },
+    {
+      "source": "Tools/MMDPipeline/framework/blender_fbx_units.py",
+      "destination": "tools/legacy/blender_fbx_units.py",
+      "source_sha256": "1a137c34dd7393c05c3a425a5c1354659b5f2710a3e938da486ba875b5949c80"
+    },
+    {
+      "source": "Tools/MMDPipeline/framework/blender_skeleton_audit.py",
+      "destination": "tools/legacy/blender_skeleton_audit.py",
+      "source_sha256": "d5bd37a6dc5ea686d260a0b285e8b1ea9308a0c9ae26768535b1c5afdfecdb8b"
+    },
+    {
+      "source": "Tools/MMDPipeline/framework/skeleton_review.py",
+      "destination": "tools/legacy/skeleton_review.py",
+      "source_sha256": "626a44c0c7ac7faa789d443765a26b59e9c2ae93822daab7b3a9e8aa0050d026"
+    },
+    {
+      "source": "Tools/MMDPipeline/framework/skeleton_plan.py",
+      "destination": "tools/legacy/skeleton_plan.py",
+      "source_sha256": "52e0c10f8a09b2a1e68ceca2b35ffac2dafcae5a19127b48b34129898594b2b9"
+    },
+    {
+      "source": "Tools/MMDPipeline/framework/skeleton_ue_mapping.py",
+      "destination": "tools/legacy/skeleton_ue_mapping.py",
+      "source_sha256": "5063b3c5670eef93d39a24f7f36f81bd70a3d880f22abbb44130738977b540e1"
+    },
+    {
+      "source": "Tools/MMDPipeline/framework/blender_apply_skeleton_plan.py",
+      "destination": "tools/legacy/blender_apply_skeleton_plan.py",
+      "source_sha256": "60c65e1decd20ef3adc6a2db3ef36041552e15a713483a5d2d4af50864eac748"
+    },
+    {
+      "source": "Tools/MMDPipeline/framework/blender_face_sdf.py",
+      "destination": "tools/legacy/blender_face_sdf.py",
+      "source_sha256": "076f26c23f6b29fdf0e5bcd45bd0bfd68c1bdd1f17444af2483e874837706e9c"
+    },
+    {
+      "source": "Tools/MMDPipeline/framework/ue_context.py",
+      "destination": "tools/legacy/ue_context.py",
+      "source_sha256": "bd1f280f6a37ae4248ee1a98f1ff91753d464383e87c37a2f485d2493714ddad"
+    },
+    {
+      "source": "Tools/MMDPipeline/framework/ue_build_character.py",
+      "destination": "tools/legacy/ue_build_character.py",
+      "source_sha256": "ed46a6e1e52431b526c2bbdd2dd525eb2a554daa14f4fc2782ba2cb82f9d8078"
+    },
+    {
+      "source": "Tools/MMDPipeline/framework/ue_master_material.py",
+      "destination": "tools/legacy/ue_master_material.py",
+      "source_sha256": "75bcdcec41c7dffe37095ab570ed40574f13cf0696012a7075093b03771e9056"
+    },
+    {
+      "source": "Tools/MMDPipeline/framework/ue_material_instances.py",
+      "destination": "tools/legacy/ue_material_instances.py",
+      "source_sha256": "a0af0efc893cc2bc15bb284af0403bcbdc31f577afc9b9c6de5d29b94294fc91"
+    },
+    {
+      "source": "Tools/MMDPipeline/framework/ue_preview.py",
+      "destination": "tools/legacy/ue_preview.py",
+      "source_sha256": "ebdc990d029c2195bf63a0a526b148f6ad7409b747a3d529390825ab1cd2fb91"
+    },
+    {
+      "source": "Tools/MMDPipeline/framework/ue_apply_features.py",
+      "destination": "tools/legacy/ue_apply_features.py",
+      "source_sha256": "84279dfb23a8b8f2cd844a76e57f65c42eb68fc80b4d83c4b57d7909557c534a"
+    },
+    {
+      "source": "Tools/MMDPipeline/framework/ue_feature_outline.py",
+      "destination": "tools/legacy/ue_feature_outline.py",
+      "source_sha256": "6d04c7786da6b3f9cb6717b22422ba88d68deda656fa7ae2da155820561e44f2"
+    },
+    {
+      "source": "Tools/MMDPipeline/framework/ue_feature_depth_rim.py",
+      "destination": "tools/legacy/ue_feature_depth_rim.py",
+      "source_sha256": "1a0a35a9c1c70cf300aa5ba25e15bfb0a88f0f42dc8f54c67568b276db667a51"
+    },
+    {
+      "source": "Tools/MMDPipeline/framework/ue_feature_cloth.py",
+      "destination": "tools/legacy/ue_feature_cloth.py",
+      "source_sha256": "e821d7775a276a092bb16264a826e91c4013a82388102606e6247e08b54526ab"
+    },
+    {
+      "source": "Tools/MMDPipeline/framework/ue_feature_stocking.py",
+      "destination": "tools/legacy/ue_feature_stocking.py",
+      "source_sha256": "921bd5f421ab464c5e8f8e3d03d760e738e17400554a02d0bad9819ebf2cc9a3"
+    },
+    {
+      "source": "Tools/MMDPipeline/framework/ue_validate.py",
+      "destination": "tools/legacy/ue_validate.py",
+      "source_sha256": "0e01224c7348e76fcbae7e43e9becfe69eb6f2052e26975b65abbecc6446b8da"
+    },
+    {
+      "source": "Tools/MMDPipeline/framework/blender_pmx_physics_inventory.py",
+      "destination": "tools/legacy/blender_pmx_physics_inventory.py",
+      "source_sha256": "54bde188ea69e9f311820106c92d572d2d93572b4538cd15185a97ed0807cf4a"
+    },
+    {
+      "source": "Tools/MMDPipeline/framework/pmx_physics_plan.py",
+      "destination": "tools/legacy/pmx_physics_plan.py",
+      "source_sha256": "5a8a1bafee99b1e050781006445b658f68d6531fc265788cc671d33b37a1b6ff"
+    },
+    {
+      "source": "Tools/MMDPipeline/framework/pmx_physics_settings.py",
+      "destination": "tools/legacy/pmx_physics_settings.py",
+      "source_sha256": "f549bcc7ba5c12b0ce2e65bad6a9170468a3e08c4ea43c1588d912b5939f1bd4"
+    },
+    {
+      "source": "Tools/MMDPipeline/framework/ue_pmx_physics_workflow.py",
+      "destination": "tools/legacy/ue_pmx_physics_workflow.py",
+      "source_sha256": "780bed13329a9015208c2e0e6dfe2ab8eaf252afab29b63e3a1095a89f0abe74"
+    },
+    {
+      "source": "Tools/MMDPipeline/framework/ue_pmx_pie_performance.py",
+      "destination": "tools/legacy/ue_pmx_pie_performance.py",
+      "source_sha256": "c0e109d1779b0b346533c7b8234cc44a2d1f207127b81f40152a850344f283f4"
+    },
+    {
+      "source": "Tools/MMDPipeline/framework/tests/test_mmd2ue_core.py",
+      "destination": "tests/inherited/test_mmd2ue_core.py",
+      "source_sha256": "d0bd538e56927be7df247d35b146be4e19a89fe3177e18674de89b369a26d161"
+    },
+    {
+      "source": "Tools/MMDPipeline/framework/tests/test_skeleton_plan.py",
+      "destination": "tests/inherited/test_skeleton_plan.py",
+      "source_sha256": "01ea10fe2d880e4c656a2edcfa0f073989498e3362a9ad34a51d7fd43606f723"
+    },
+    {
+      "source": "Tools/MMDPipeline/framework/tests/test_skeleton_review.py",
+      "destination": "tests/inherited/test_skeleton_review.py",
+      "source_sha256": "613ecb1f1068b9c1561c58132eb896f2fecbd67b998225c6bffe532c42e3510a"
+    },
+    {
+      "source": "Tools/MMDPipeline/framework/tests/test_skeleton_ue_mapping.py",
+      "destination": "tests/inherited/test_skeleton_ue_mapping.py",
+      "source_sha256": "732a7899745b8057c6ec253a59eb6c440d0d09ff5e1161cb822cacae192877a4"
+    },
+    {
+      "source": "Tools/MMDPipeline/framework/tests/test_pmx_physics_plan.py",
+      "destination": "tests/inherited/test_pmx_physics_plan.py",
+      "source_sha256": "74aad12a100b8562de1e6b9798bf95c6dd695185828ccd3816380cecb75b9b2c"
+    },
+    {
+      "source": "Tools/MMDPipeline/framework/tests/test_pmx_physics_settings.py",
+      "destination": "tests/inherited/test_pmx_physics_settings.py",
+      "source_sha256": "7486fb7de191805109a18e6208cac61782599f03b95c9a4e22bb17e0ee102ae0"
+    },
+    {
+      "source": "Tools/MMDPipeline/blender_prepare.py",
+      "destination": "tools/blender_prepare.py",
+      "source_sha256": "799917f4500e04728418cfdac50701edda729a3881be2f93837f5406c886255c"
+    },
+    {
+      "source": "Tools/MMDPipeline/blender_face_sdf_probe.py",
+      "destination": "tools/blender_face_sdf_probe.py",
+      "source_sha256": "d502cef146bdfc91dfaed7df001faa32a66b4ec1a019c596bc15bf421b91bd60"
+    },
+    {
+      "source": "Tools/MMDPipeline/framework/profiles/material_profile_presets.v1.json",
+      "destination": "presets/materials.v1.json",
+      "source_sha256": "ccd1f31c835caeb1800f68b1291ca3997bae8f48a2e65ec6a92ced759fa73d76"
+    },
+    {
+      "source": "Source/MMD2UE/Public/AnimNode_PmxFilteredRigidBody.h",
+      "destination": "unreal/PMX4UE/Source/PMX4UE/Public/AnimNode_PmxFilteredRigidBody.h",
+      "source_sha256": "75459af6e73387a8e4603ec92d53899ed3be2715200c300699b5e55a22bc245b"
+    },
+    {
+      "source": "Source/MMD2UE/Private/AnimNode_PmxFilteredRigidBody.cpp",
+      "destination": "unreal/PMX4UE/Source/PMX4UE/Private/AnimNode_PmxFilteredRigidBody.cpp",
+      "source_sha256": "766f1f6931f7a0109ae3ebc0753691b2b740a4323089df28b058b70835a17254"
+    },
+    {
+      "source": "Source/MMD2UEEditor/Public/AnimGraphNode_PmxFilteredRigidBody.h",
+      "destination": "unreal/PMX4UE/Source/PMX4UEEditor/Public/AnimGraphNode_PmxFilteredRigidBody.h",
+      "source_sha256": "fd00b1f04b24c22f71f2cccc621cc7b88de6bbbb59ee66095d8c376cbeb4aa63"
+    },
+    {
+      "source": "Source/MMD2UEEditor/Public/MMD2UEPmxSkirtTools.h",
+      "destination": "unreal/PMX4UE/Source/PMX4UEEditor/Public/PMX4UEPmxSkirtTools.h",
+      "source_sha256": "2af7cb42320c26c8c71f00d8cfe896b349e4d3650538ba6335c46fbf3fd85411"
+    },
+    {
+      "source": "Source/MMD2UEEditor/Private/MMD2UEPmxSkirtTools.cpp",
+      "destination": "unreal/PMX4UE/Source/PMX4UEEditor/Private/PMX4UEPmxSkirtTools.cpp",
+      "source_sha256": "9eeab32854b3be5ef2a16cdd7a7b50b39212223ae8e2bc8c17eee19599cf8001"
+    },
+    {
+      "source": "Source/MMD2UEEditor/Public/MMD2UEAgentMCPTools.h",
+      "destination": "unreal/PMX4UE/Source/PMX4UEEditor/Public/PMX4UEAgentMCPTools.h",
+      "source_sha256": "23a6334bb5f5ec21fdb0bf7c635d678d315cf0c665710ef32036defabf095b88"
+    },
+    {
+      "source": "Source/MMD2UEEditor/Private/MMD2UEAgentMCPTools.cpp",
+      "destination": "unreal/PMX4UE/Source/PMX4UEEditor/Private/PMX4UEAgentMCPTools.cpp",
+      "source_sha256": "c99bcad9a95ec0ee874697eefb77ab215c528c5aacfe91820cdf1022a91452b1"
+    }
+  ]
+}
