@@ -18,3 +18,7 @@ Face SDF、轮廓、丝袜/布料专用材质、头发高光不是每个 PMX 的
 - `ue_feature_cloth.py` / `ue_feature_stocking.py`：先判断模型是否有合适 mask，再构建；缺资源时退回基础材质并记录差距。
 
 法线发黑先做零模拟对照，再分别检查拓扑绕序、变换 handedness、法线/切线与材质，不能直接反转所有法线。受物理影响只在模拟路径出现时，先查模拟→骨骼变换，不重写原本正常 mesh。
+
+## 动画中的面部 SDF
+
+材质编译通过不代表面部朝向随动画更新。启用 Face SDF 的游戏角色还应按 `docs/face-sdf-runtime.md` 检查头骨驱动、参考姿态轴校准、世界/模型空间契约和每实例参数隔离。审核 `templates/face_sdf.example.json` 的角色副本，设置工单 `pmx4ue.face_sdf_profile`，执行 `face-sdf` 阶段，生成独立材质与预览 BP。插件含 `PMX4UEFaceSDFComponent`，MMD2UE 使用现有 `MMDFaceSDFComponent` 适配，不安装重复插件。不要把 Actor 朝向当头骨朝向，或将已是世界空间的轴再次 Local→World。验收应在拥有驱动组件的角色实例进行，不以普通 ABP 预览代替；新角色必须重新确认双轴与视觉效果。

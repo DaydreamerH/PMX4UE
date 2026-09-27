@@ -23,6 +23,7 @@ STAGES = ("audit", "export", "skeleton-audit", "skeleton-plan", "skeleton-apply"
           "material-draft", "material-check", "ue-build", "ue-validate", "ik", "retarget-pose",
           "physics-inventory", "physics-inspect", "physics-plan", "physics-build",
           "physics-test", "performance")
+STAGES += ("face-sdf",)
 
 
 def read(path):
@@ -157,7 +158,12 @@ def recipe(c, project, a, stage):
         return [str(exe), str(project), *(["/Engine/Maps/Templates/Template_Default"] if pie else ["-run=pythonscript"]),
                 flag + str(ROOT / "tools/ue_entry.py"), "-unattended", "-nop4", "-nosplash"]
 
-    if stage == "audit":
+    if stage == "face-sdf":
+        require(p.get("face_sdf_profile"), "Set face_sdf_profile after face-axis review")
+        inputs = [Path(p["face_sdf_profile"])]
+        env.update(PMX4UE_FACE_SDF_PROFILE=str(inputs[0]), PMX4UE_OUTPUT=str(out))
+        argv = ue(ROOT / "tools/ue_face_sdf_workflow.py") + ["-AllowCommandletRendering"]
+    elif stage == "audit":
         internal = "audit"
         inputs = [Path(c["source"]["pmx"])]
     elif stage == "export":

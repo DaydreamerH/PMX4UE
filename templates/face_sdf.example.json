@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "reviewed": false,
+  "review_evidence": "",
+  "provider": "pmx4ue",
+  "mesh": "/Game/PMX4UE/Example/v1/Mesh/SK_Example",
+  "destination": "/Game/PMX4UE/Example/v1/FaceSDF_v1",
+  "face_slot": "",
+  "head_bone": "",
+  "reference_forward": [0, 1, 0],
+  "reference_left": [1, 0, 0],
+  "animation_blueprint": null
+}
