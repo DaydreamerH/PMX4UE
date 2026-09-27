@@ -1,7 +1,7 @@
 """Generic PBR/NPR master material for any MMD character.
 
 The node graph is character independent.  Every texture parameter receives a
-compile-safe default resolved from the character's material map (see
+typed neutral default, never another slot's authored texture (see
 ``BuildContext.default_texture``); each per-slot material instance overrides
 the texture and scalar parameters.  Optional eye/glass/fringe passes are only
 built when the material map declares them.

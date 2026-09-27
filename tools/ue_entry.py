@@ -21,9 +21,10 @@ if stage == "physics-build":
     paths += list(plan.get("performance_controls", {}).values())
     if any(not p.startswith(config["paths"]["ue_root"] + "/") for p in paths):
         raise RuntimeError("Physics destinations must belong to this character variant")
-if stage == "ue-build":
+if stage in {"ue-build", "material-build"}:
     root = config["paths"]["ue_root"]
-    if unreal.EditorAssetLibrary.list_assets(root, recursive=True, include_folder=False):
+    occupied = unreal.EditorAssetLibrary.list_assets(root, recursive=True, include_folder=False)
+    if any(not path.startswith(root + "/Preflight/") for path in occupied):
         raise RuntimeError("Destination namespace occupied; choose a new character variant")
     # Strict map validation occurs before any imports in BuildContext.
 script = Path(os.environ["PMX4UE_SCRIPT"]).resolve()

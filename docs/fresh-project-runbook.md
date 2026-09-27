@@ -8,6 +8,8 @@
 
 先按 README 打包/安装与目标 UE 匹配的插件。当前验证 UE 5.8.2、Blender 3.6.23+mmd_tools、Python 3.10+。工具路径、源单位、角色 ID 由本机证据确定，不复制本机 D 盘路径。
 
+Windows 构建启动前，阅读[环境参考：UBT 跟踪日志与沙箱](../skills/pmx-to-ue/references/environment.md)。工程可写不代表用户 AppData 可写；UE 5.8 早期 `Trace.uba` 轮换不受普通 `-Log` 重定向修复。出现拒绝访问先留证据并分类，确认沙箱限制后走宿主审批，条件修复后仅重试一次；构建通过与角色验收分开记录。
+
 ## 执行顺序
 
 所有阶段通过 `python pmx4ue.py run --config <工作单> --stage <阶段>` 预览，加 `--execute` 才执行。先用 `init` 生成配置，再 `doctor` 和 `capabilities`：前者查路径，后者在 UE 中验证实际加载接口，不能互相替代。
@@ -17,8 +19,9 @@
 | audit → export | 审核单位、贴图完整性；源 PMX 只读，厘米 FBX，manifest 保留 PMX 原名→导出骨名 |
 | skeleton-audit | 骨骼语义、权重、共同祖先；默认 preserve，不清理腿骨 |
 | skeleton-plan → skeleton-apply（可选） | 有证据才选择 upper-only；独立输出，不覆盖原 mesh |
-| material-draft → material-check | 审核槽、贴图用途、透明/双面/风格，不把建议当事实 |
-| ue-build → ue-validate → material-compile | 新 namespace 导入；槽/参数/纹理检查，再实际 RHI 材质编译；agent 看画面 |
+| material-draft → 逐材质族设计 → material-check | 按 material-families.md 设计专用图/共享函数/Pass 与局部验收；覆盖真实槽、纹理/UV/通道、父路由，不把建议或基础贴色当最终效果 |
+| ue-build → ue-validate → material-compile | 新 namespace 导入；槽/参数/纹理检查，再实际 RHI 材质编译；此时视觉仍 pending |
+| material-preview → agent 视觉审核 | 隔离地图和组件材质变体，固定视角/多光照/Lit+Unlit+WorldNormal；等待真实 PNG，填写 material-review；无动画也可执行 |
 | face-sdf（可选，脸部 SDF 材质已有时） | 审核头骨、参考双轴、槽与 provider，生成独立材质/预览 BP；按 face-sdf-runtime.md 验证真实动画跟随 |
 | physics-inventory → draft_profiles.py | 读取 PMX 原始刚体/关节/双向 mask；生成未审核 IK/物理档案 |
 | ik → 姿态采集/模型与配对方案 → retarget-pose → 新进程重载 | 双侧真实不同骨架，角色语义驱动；详见 agent-retarget-workflow.md |

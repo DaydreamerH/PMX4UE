@@ -24,6 +24,7 @@ if str(FRAMEWORK_DIR) not in sys.path:
 from mmd2ue_core import TEXTURE_PARAMETER_NAMES  # noqa: E402
 from ue_context import BuildContext  # noqa: E402
 from ue_material_instances import material_asset_name  # noqa: E402
+from material_input_policy import effective_scalars
 
 UNARY_CLASSES = {
     "MaterialExpressionSaturate",
@@ -46,6 +47,14 @@ def _texture_value(instance, name):
     try:
         texture = unreal.MaterialEditingLibrary.get_material_instance_texture_parameter_value(instance, name)
         return texture.get_name().lower() if texture else None
+    except Exception:
+        return None
+
+
+def _vector_value(instance, name):
+    try:
+        value = unreal.MaterialEditingLibrary.get_material_instance_vector_parameter_value(instance, name)
+        return [float(getattr(value, channel)) for channel in ("r", "g", "b", "a")]
     except Exception:
         return None
 
@@ -93,9 +102,13 @@ def main() -> None:
     args, _ = parser.parse_known_args(argv)
 
     ctx = BuildContext(args.config, variant=args.variant, strict=False)
-    ctx.import_textures()
+    map_errors = [issue for issue in ctx.map_issues if issue["level"] == "error"]
+    if map_errors:
+        raise RuntimeError(f"Cannot validate ambiguous/invalid material routes: {map_errors}")
+    ctx.import_textures(read_only=True)
     root = ctx.names["material_root"]
-    mesh = unreal.EditorAssetLibrary.load_asset(f"{ctx.names['mesh_root']}/{ctx.names['mesh_asset']}")
+    source_mesh = ctx.config.get("pmx4ue", {}).get("material_source_mesh")
+    mesh = unreal.EditorAssetLibrary.load_asset(source_mesh or f"{ctx.names['mesh_root']}/{ctx.names['mesh_asset']}")
     master = unreal.EditorAssetLibrary.load_asset(f"{root}/{ctx.names['master_asset']}")
 
     violations: list[str] = []
@@ -122,7 +135,7 @@ def main() -> None:
         if instance is None:
             violations.append(f"{slot_name}: missing instance {instance_path}")
             continue
-        if index < len(mesh_materials) and mesh_materials[index] != instance.get_path_name():
+        if not source_mesh and index < len(mesh_materials) and mesh_materials[index] != instance.get_path_name():
             violations.append(f"{slot_name}: mesh slot binds {mesh_materials[index]} instead of {instance.get_path_name()}")
 
         parent = None
@@ -131,29 +144,61 @@ def main() -> None:
         except Exception:
             parent = None
         parent_is_master = parent is not None and master is not None and parent.get_path_name() == master.get_path_name()
+        route = ctx.special_kind_for_slot(slot_name) or "master"
+        parent_assets = ctx.material_map.get("parent_assets", {})
+        builtin_names = {"master": "master_asset", "stocking": "stocking_asset", "cloth": "cloth_asset",
+                         "eye_add": "eye_add_asset", "additive": "eye_add_asset", "eye_multiply": "eye_multiply_asset",
+                         "glass": "glass_asset", "invisible": "invisible_asset"}
+        expected_parent_path = parent_assets.get(route)
+        if route in builtin_names:
+            expected_parent_path = f"{root}/{ctx.names[builtin_names[route]]}"
+        expected_parent = unreal.load_asset(expected_parent_path) if expected_parent_path else None
+        if parent is None or expected_parent is None or parent.get_path_name() != expected_parent.get_path_name():
+            violations.append(f"{slot_name}: parent route {route} does not match {expected_parent_path}")
 
         effective = {}
+        input_audit = []
+        supported = {str(n) for n in unreal.MaterialEditingLibrary.get_texture_parameter_names(instance)}
         for role, parameter in TEXTURE_PARAMETER_NAMES.items():
             expected = entry["textures"].get(role)
+            if parameter not in supported:
+                if expected:
+                    violations.append(f"{slot_name}: declared {role} is not consumed")
+                continue
             actual = _texture_value(instance, parameter)
-            if expected and actual != str(expected).lower():
-                violations.append(f"{slot_name}: {parameter} = {actual!r}, expected {expected!r}")
+            expected_texture = ctx.texture_for(expected) if expected else ctx.neutral_texture(role, create=False)
+            actual_texture = unreal.MaterialEditingLibrary.get_material_instance_texture_parameter_value(instance, parameter)
+            if (expected_texture is None or actual_texture is None
+                    or actual_texture.get_path_name() != expected_texture.get_path_name()):
+                violations.append(f"{slot_name}: {parameter} does not match declared/neutral input")
+            input_audit.append(dict(role=role, source="declared" if expected else "generated_neutral",
+                                    actual=actual_texture.get_path_name() if actual_texture else None,
+                                    expected=expected_texture.get_path_name() if expected_texture else None))
             effective[role] = actual
 
-        if parent_is_master:
+        if parent_is_master or route in {"stocking", "cloth"} or route in parent_assets:
             profile = ctx.material_map.get("profiles", {}).get(entry.get("profile"), {})
-            expected_scalars = dict(profile.get("scalars", {}) or {})
-            expected_scalars.update((entry.get("overrides", {}) or {}).get("scalars", {}) or {})
+            expected_scalars, debt = effective_scalars(entry, profile, route)
+            ctx.material_debt.extend(debt)
             for name, expected in expected_scalars.items():
                 actual = _scalar_value(instance, name)
                 if actual is None or abs(actual - float(expected)) > 0.0001:
                     violations.append(f"{slot_name}: scalar {name} = {actual}, expected {expected}")
+            expected_vectors = dict(profile.get("vectors", {}) or {})
+            expected_vectors.update((entry.get("overrides", {}) or {}).get("vectors", {}) or {})
+            for name, expected in expected_vectors.items():
+                actual = _vector_value(instance, name)
+                if (actual is None or len(expected) != 4
+                        or any(abs(a - float(b)) > 0.0001 for a, b in zip(actual, expected))):
+                    violations.append(f"{slot_name}: vector {name} = {actual}, expected {expected}")
         slots_audit.append({
             "slot": slot_name,
             "profile": entry.get("profile"),
             "instance": instance.get_path_name(),
             "parent": parent.get_path_name() if parent else None,
+            "declared_route": route,
             "effective_textures": effective,
+            "input_audit": input_audit,
         })
 
     texture_audit = []
@@ -166,9 +211,9 @@ def main() -> None:
                 continue
             srgb = bool(texture.get_editor_property("srgb")) if hasattr(texture, "srgb") else None
             compression = str(texture.get_editor_property("compression_settings") or "")
-            if role == "normal" and srgb:
-                violations.append(f"{key}: normal map must not be sRGB")
-            if role in MASK_ROLES and "MASKS" not in compression.upper() and "NORMALMAP" not in compression.upper():
+            if role == "normal" and (srgb or "NORMALMAP" not in compression.upper()):
+                violations.append(f"{key}: normal map requires linear Normalmap compression")
+            if role in MASK_ROLES and (srgb or "MASKS" not in compression.upper()):
                 violations.append(f"{key}: {role} should use a mask compression setting")
             if role == "base_color" and srgb is False:
                 violations.append(f"{key}: base colour should be sRGB")
@@ -195,6 +240,9 @@ def main() -> None:
         "engine": unreal.SystemLibrary.get_engine_version(),
         "character_id": ctx.names["character_id"],
         "variant": ctx.variant or "default",
+        "binding_scope": "unassigned_component_overrides" if source_mesh else "mesh_default_materials",
+        "source_mesh": source_mesh,
+        "material_debt": ctx.material_debt,
         "mesh": ctx.names["mesh_asset"],
         "master": ctx.names["master_asset"],
         "mesh_material_count": len(mesh_materials),

@@ -1,0 +1,20 @@
+{
+  "schema": "pmx4ue.material-preview.v1",
+  "reviewed": false,
+  "mesh": "/Game/PMX4UE/Character/v1/Mesh/REPLACE_WITH_ACTUAL_MESH",
+  "level": "/Game/PMX4UE/Character/v1/Preview/MaterialReview_v1",
+  "width": 1200,
+  "height": 1200,
+  "warmup_seconds": 5,
+  "exposure_ev100": 3,
+  "cameras": [
+    {"name": "Front", "azimuth": 90, "distance": 260, "height": 8, "fov": 38},
+    {"name": "Side", "azimuth": 0, "distance": 260, "height": 8, "fov": 38}
+  ],
+  "lights": [
+    {"name": "KeyA", "pitch": -35, "yaw": -45, "intensity": 6},
+    {"name": "KeyB", "pitch": -35, "yaw": 135, "intensity": 6}
+  ],
+  "modes": ["Lit", "Unlit", "WorldNormal"],
+  "cases": [{"name": "Baseline", "slots": []}]
+}

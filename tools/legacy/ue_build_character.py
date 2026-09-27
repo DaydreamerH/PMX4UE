@@ -5,8 +5,7 @@ Stages:
   material - rebuild master, optional eye/glass/invisible/fringe passes,
              create per-slot instances and bind them to the mesh
   build    - import + material only (default; leave the current level untouched)
-  preview  - configure the current level with an opt-in studio rig
-  full     - import + material + studio preview (legacy opt-in)
+  preview/full - retired: use the isolated material-preview runner stage
 
 Usage:
   UnrealEditor-Cmd MMD2UE.uproject -run=pythonscript -script=.../ue_build_character.py -- --config <path> [--mode build]
@@ -56,6 +55,23 @@ def parse_args() -> argparse.Namespace:
 
 def build_special_masters(ctx, kinds):
     table = {}
+    # Explicit dispatch, not name-based guessing. Dedicated graphs are built
+    # before instances; later builds retain the declared parent route.
+    for kind, module_name in (("stocking", "ue_feature_stocking"), ("cloth", "ue_feature_cloth")):
+        if kind in kinds:
+            import importlib
+            slots = [e["slot"] for e in ctx.slot_entries() if ctx.special_kind_for_slot(e["slot"]) == kind]
+            result = importlib.import_module(module_name).build(ctx, reparent=False, slots=slots)
+            if result.get("status") != "success":
+                raise BuildError(f"Required {kind} graph was not built: {result}; no fallback to Master")
+            table[kind] = unreal.load_asset(result["material"])
+    for alias, path in ctx.material_map.get("parent_assets", {}).items():
+        if alias not in kinds:
+            continue
+        parent = unreal.load_asset(path)
+        if not isinstance(parent, unreal.MaterialInterface):
+            raise BuildError(f"Required parent {alias} is not a saved material: {path}")
+        table[alias] = parent
     additive_kinds = [kind for kind in ("eye_add", "additive") if kind in kinds]
     if additive_kinds:
         additive = create_eye_blend(ctx, ctx.names["eye_add_asset"], unreal.BlendMode.BLEND_ADDITIVE)
@@ -94,10 +110,27 @@ def main() -> None:
     if not args.config:
         raise BuildError("--config or MMD2UE_CHARACTER_CONFIG is required")
     mode = args.mode.strip().lower()
+    if mode in {"preview", "full"}:
+        raise BuildError("Legacy current-level preview is disabled. Use build, then pmx4ue.py material-preview with a reviewed profile")
     if mode not in {"import", "material", "build", "preview", "full"}:
         raise BuildError(f"unsupported build mode: {mode}")
     ctx = BuildContext(args.config, variant=args.variant, strict=not args.allow_unapproved, require_map=mode != "import")
     ctx.check_coverage()
+    source_mesh = ctx.config.get("pmx4ue", {}).get("material_source_mesh")
+    if source_mesh and mode != "material":
+        raise BuildError("material_source_mesh requires material-build; never reimport the source mesh")
+    if source_mesh:
+        retained = unreal.load_asset(source_mesh)
+        if not isinstance(retained, unreal.SkeletalMesh):
+            raise BuildError("Retained mesh not found")
+        source_slots = list(retained.get_editor_property("materials"))
+        ordered = ctx.manifest_slot_names()
+        if len(source_slots) != len(ordered):
+            raise BuildError("Retained mesh/manifest slot count mismatch")
+        for slot, name in zip(source_slots, ordered):
+            names = {str(slot.get_editor_property(key)) for key in ("material_slot_name", "imported_material_slot_name")}
+            if name not in names:
+                raise BuildError(f"Retained slot order differs: {name} not in {names}; inspect the correct source manifest")
 
     report = {
         "status": "success",
@@ -113,7 +146,7 @@ def main() -> None:
     report["textures"] = len(ctx.texture_map)
 
     mesh = ctx.import_skeletal_mesh() if mode in ("import", "build", "full") else unreal.EditorAssetLibrary.load_asset(
-        f"{ctx.names['mesh_root']}/{ctx.names['mesh_asset']}"
+        source_mesh or f"{ctx.names['mesh_root']}/{ctx.names['mesh_asset']}"
     )
     if mode in ("material", "build", "full") and not isinstance(mesh, unreal.SkeletalMesh):
         mesh = unreal.EditorAssetLibrary.load_asset(f"{ctx.names['mesh_root']}/{ctx.names['mesh_asset']}")
@@ -139,7 +172,23 @@ def main() -> None:
         for entry in ctx.slot_entries():
             instances[entry["slot"]] = create_instance(ctx, master, entry, special_masters)
         report["material_instances"] = len(instances)
-        report["assigned_slots"] = assign_materials(ctx, mesh, instances)
+        if source_mesh:
+            ordered = ctx.manifest_slot_names()
+            if len(mesh.get_editor_property("materials")) != len(ordered):
+                raise BuildError("Source mesh and manifest slot counts differ")
+            report["component_overrides"] = [{"index": i, "slot": slot, "material": instances[slot].get_path_name()}
+                                             for i, slot in enumerate(ordered)]
+            report["assigned_slots"] = 0
+            report["binding_scope"] = "unassigned_component_overrides"
+        else:
+            report["assigned_slots"] = assign_materials(ctx, mesh, instances)
+        report["material_routes"] = [{"slot": e["slot"], "profile": e["profile"],
+                                      "route": ctx.special_kind_for_slot(e["slot"]) or "master",
+                                      "parent": instances[e["slot"]].get_editor_property("parent").get_path_name()}
+                                     for e in ctx.slot_entries()]
+        report["material_quality"] = "built_visual_pending"
+        report["input_audit"] = ctx.input_audit
+        report["material_debt"] = ctx.material_debt
 
     if mode in ("preview", "full"):
         report["preview"] = setup_preview(ctx, mesh)

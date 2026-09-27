@@ -32,8 +32,9 @@ from ue_context import (  # noqa: E402
 from ue_material_instances import material_asset_name  # noqa: E402
 
 
-def build(ctx: BuildContext) -> dict:
-    entries = [entry for entry in ctx.slot_entries() if entry.get("profile") == "stocking"]
+def build(ctx: BuildContext, reparent: bool = True, slots=None) -> dict:
+    entries = [entry for entry in ctx.slot_entries() if
+               (entry["slot"] in slots if slots is not None else entry.get("profile") == "stocking")]
     if not entries:
         return {"status": "skipped", "reason": "no stocking-profile slots"}
 
@@ -101,9 +102,8 @@ def build(ctx: BuildContext) -> dict:
     connect(base_tinted, "", physical_base, "A")
     connect(edge_color, "", physical_base, "B")
     connect_property(physical_base, "", unreal.MaterialProperty.MP_BASE_COLOR)
-    # Opaque knit: the arm sock has no skin mesh underneath, so translucency is
-    # not usable.  The fabric reads through edge darkening + a soft macro sheen
-    # instead of alpha.
+    # This adapter uses masked coverage, not physically translucent hosiery.
+    # Review under-skin geometry and source alpha before selecting it.
     alpha_scale = scalar(material, "AlphaScale", sc("AlphaScale", 1.0), -1240, 20)
     opacity = expression(material, unreal.MaterialExpressionMultiply, -1040, 0)
     connect(base_node, "A", opacity, "A")
@@ -208,7 +208,7 @@ return Tint * spec * Strength;
     unreal.EditorAssetLibrary.save_loaded_asset(material, False)
 
     reparented = []
-    for entry in entries:
+    for entry in entries if reparent else []:
         name = f"{ctx.names['instance_prefix']}_{material_asset_name(entry['slot'])}"
         instance = unreal.EditorAssetLibrary.load_asset(f"{root}/{name}")
         if not isinstance(instance, unreal.MaterialInstanceConstant):
@@ -226,6 +226,8 @@ return Tint * spec * Strength;
         "status": "success",
         "material": material.get_path_name(),
         "reparented": reparented,
+        "selected_slots": [entry["slot"] for entry in entries],
+        "graph_only": not reparent,
         "shading": "Default Lit PBR plus anisotropic Cook-Torrance macro lobe",
         "fibre": "character-local direction projected onto the pixel normal",
     }

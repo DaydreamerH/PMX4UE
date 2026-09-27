@@ -1,10 +1,7 @@
-"""Configure a repeatable studio preview in the current default editor level.
+"""Legacy helpers. Destructive current-level setup is retired.
 
-The stage does not create or load a level asset: it operates on whatever world
-is currently open (the editor's built-in Untitled level is the intended target)
-and spawns/refreshes the character, key/fill/rim lights, a fixed exposure post
-process and a named camera.  This keeps the material reference identical across
-characters and avoids accumulating Preview level assets.
+Use the owned material-preview runner. The remaining low-level spawn/focus
+helpers require explicit caller authorization for the current level.
 """
 
 from __future__ import annotations
@@ -27,20 +24,7 @@ def _look_at_rotation(origin, target) -> unreal.Rotator:
 
 
 def _destroy_previous(cid: str) -> None:
-    removable = (
-        unreal.SkeletalMeshActor,
-        unreal.DirectionalLight,
-        unreal.RectLight,
-        unreal.PointLight,
-        unreal.SpotLight,
-        unreal.CameraActor,
-        unreal.PostProcessVolume,
-    )
-    toon_class = getattr(unreal, "MMDToonCharacterActor", None)
-    for actor in unreal.EditorLevelLibrary.get_all_level_actors():
-        label = actor.get_actor_label()
-        if isinstance(actor, removable) or (toon_class and isinstance(actor, toon_class)) or label.startswith(f"{cid}_"):
-            unreal.EditorLevelLibrary.destroy_actor(actor)
+    raise RuntimeError("Current-level actor cleanup is disabled; use the isolated material-preview stage")
 
 
 def spawn_character(ctx, mesh=None, location=None):

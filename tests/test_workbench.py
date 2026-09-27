@@ -25,6 +25,26 @@ class WorkbenchTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "scale"):
             w.run(self.c, self.project, self.a, "export")
 
+    def test_material_only_recipe_does_not_require_fbx(self):
+        self.c["pmx4ue"].update(material_reviewed=True, material_source_mesh="/Game/PMX4UE/Example/base/Mesh/SK_Example")
+        spec = w.run(self.c, self.project, self.a, "material-build")
+        self.assertEqual(spec["env"]["MMD2UE_BUILD_MODE"], "material")
+        self.assertFalse(any(path.endswith(".fbx") for path in spec["inputs"]))
+        self.assertFalse(self.a.exists())
+
+    def test_preflight_is_dry(self):
+        spec = w.run(self.c, self.project, self.a, "material-preflight")
+        self.assertTrue(spec["env"]["PMX4UE_SCRIPT"].endswith("ue_material_preflight.py"))
+        self.assertFalse(self.a.exists())
+
+    def test_material_preview_owns_new_full_editor(self):
+        spec = w.run(self.c, self.project, self.a, "material-preview")
+        self.assertTrue(spec["argv"][0].endswith("UnrealEditor.exe"))
+        self.assertIn("-RenderOffscreen", spec["argv"])
+        self.assertIn("-PMX4UEPreview=" + spec["env"]["PMX4UE_PREVIEW_TOKEN"], spec["argv"])
+        self.assertIn(str(self.a / "material_compile.json"), spec["inputs"])
+        self.assertFalse(self.a.exists())
+
     def test_added_stages_are_dry_and_explicit(self):
         for stage, script in [('capabilities','ue_capabilities.py'), ('animation-export','ue_animation_export.py'),
                               ('material-compile','ue_material_compile.py')]:

@@ -1,0 +1,19 @@
+{
+  "schema": "pmx4ue.delivery.v1",
+  "project": "D:/YourProject/YourProject.uproject",
+  "scope": ["materials"],
+  "assets": [
+    {"id": "mesh", "role": "mesh", "path": "/Game/PMX4UE/Character/base/Mesh/SK_Character", "sha256": "REPLACE_WITH_CURRENT_FILE_HASH", "evidence": ["base_build"], "compatibility_note": "Fill actual slot-order/skeleton relationship to selected material instances"},
+    {"id": "hair_material", "role": "material", "path": "/Game/PMX4UE/Character/lookdev/Materials/MI_Hair", "sha256": "REPLACE_WITH_CURRENT_FILE_HASH", "evidence": ["material_build", "validation"], "compatibility_note": "Fill actual target slot and preview override index"}
+  ],
+  "evidence": [
+    {"id": "base_build", "kind": "run", "path": "D:/YourProject/Saved/PMX4UE/Character/base/runs/REPLACE_ue-build.json", "sha256": "REPLACE"},
+    {"id": "material_build", "kind": "run", "path": "D:/YourProject/Saved/PMX4UE/Character/lookdev/runs/REPLACE_material-build.json", "sha256": "REPLACE"},
+    {"id": "validation", "kind": "material_validation", "path": "D:/YourProject/Saved/PMX4UE/Character/lookdev/ue_validation.json", "sha256": "REPLACE"},
+    {"id": "comparison", "kind": "capture", "path": "D:/YourProject/Saved/PMX4UE/Character/lookdev/material_previews/v1/material_preview.json", "sha256": "REPLACE"}
+  ],
+  "effects": [
+    {"id": "hair_highlight", "slots": ["REPLACE_ACTUAL_SLOT"], "status": "pending", "implementation": "", "comparison_required": true, "image_sha256": [], "images_opened": false, "reviewer": "", "observation": "", "next_action": "Inspect source UV/masks, implement candidate and compare under matching cameras/lights"}
+  ],
+  "dispositions": {}
+}

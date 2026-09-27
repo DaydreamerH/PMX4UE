@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 import unreal
+from material_input_policy import neutral_png
 
 FRAMEWORK_DIR = Path(__file__).resolve().parent
 if str(FRAMEWORK_DIR) not in sys.path:
@@ -94,9 +95,16 @@ def expression(material, cls, x: int, y: int):
 
 def connect(source, output: str, target, input_name: str) -> None:
     if not unreal.MaterialEditingLibrary.connect_material_expressions(source, output, target, input_name):
+        query = getattr(unreal.MaterialEditingLibrary, "get_material_expression_input_names", None)
+        try:
+            actual_inputs = list(map(str, query(target))) if callable(query) else "API unavailable"
+        except Exception as error:
+            actual_inputs = "query failed: " + str(error)
         raise BuildError(
             f"failed to connect {source.get_class().get_name()}[{output or 'default'}] "
-            f"-> {target.get_class().get_name()}[{input_name or 'default'}]"
+            f"-> {target.get_class().get_name()}[{input_name or 'default'}]; "
+            f"actual_inputs={actual_inputs}; engine={unreal.SystemLibrary.get_engine_version()}. "
+            "Inspect this node's API before adapting its pin or using a mathematically equivalent graph."
         )
 
 
@@ -132,11 +140,15 @@ def vector(material, name: str, rgba, x: int, y: int):
 
 
 def texture_parameter(material, name: str, default_texture, x: int, y: int, sampler=None):
+    if not isinstance(default_texture, unreal.Texture2D):
+        raise BuildError(f"Texture parameter {name} requires a real default Texture2D, even when its branch is optional")
     node = expression(material, unreal.MaterialExpressionTextureSampleParameter2D, x, y)
-    safe_set(node, "parameter_name", name)
-    safe_set(node, "texture", default_texture)
+    properties = {"parameter_name": name, "texture": default_texture}
     if sampler is not None:
-        safe_set(node, "sampler_type", sampler)
+        properties["sampler_type"] = sampler
+    for key, value in properties.items():
+        if not safe_set(node, key, value):
+            raise BuildError(f"Cannot configure texture parameter {name}.{key}; inspect engine API")
     return node
 
 
@@ -291,6 +303,9 @@ class BuildContext:
             raise BuildError(f"material map is not approved: {self.map_issues}")
         self.texture_map: dict[str, object] = {}
         self.imported = False
+        self.input_audit = []
+        self.material_debt = []
+        self._neutrals = {}
 
     # -- paths ---------------------------------------------------------------
     def artifact(self) -> Path:
@@ -333,9 +348,18 @@ class BuildContext:
             raise BuildError(f"material map coverage mismatch: missing={missing} extra={extra}")
 
     # -- textures ------------------------------------------------------------
-    def import_textures(self) -> dict[str, object]:
-        mkdir(self.names["texture_root"])
+    def import_textures(self, read_only=False) -> dict[str, object]:
+        if not read_only:
+            mkdir(self.names["texture_root"])
         texture_map: dict[str, object] = {}
+        reused = self.config.get("pmx4ue", {}).get("material_texture_assets", {})
+        for key, path in reused.items():
+            if not isinstance(key, str) or key.lower() in texture_map:
+                raise BuildError(f"Invalid/duplicate reused texture key: {key}")
+            texture = load(path)
+            if not isinstance(texture, unreal.Texture2D):
+                raise BuildError(f"Missing explicitly reused texture: {key} = {path}")
+            texture_map[key.lower()] = texture  # Never reconfigure shared assets.
         declared_roles: dict[str, str] = {}
         for entry in self.slot_entries():
             for role, key in entry.get("textures", {}).items():
@@ -352,23 +376,27 @@ class BuildContext:
             if key in seen:
                 continue
             seen.add(key)
+            if key in texture_map:
+                continue
             asset_path = f"{self.names['texture_root']}/{filename.stem}"
             texture = load(asset_path) if asset_exists(asset_path) else None
-            if texture is None:
+            if texture is None and not read_only:
                 imported = import_one(filename, self.names["texture_root"], destination_name=filename.stem)
                 texture = imported[0] if imported else load(asset_path)
             if texture:
-                configure_texture(texture, filename, declared_roles.get(key))
+                if not read_only:
+                    configure_texture(texture, filename, declared_roles.get(key))
                 texture_map[key] = texture
         face_sdf = Path(self.names["face_sdf"])
-        if face_sdf.is_file():
+        if face_sdf.is_file() and face_sdf.stem.lower() not in texture_map:
             sdf_asset_path = f"{self.names['texture_root']}/{face_sdf.stem}"
             texture = load(sdf_asset_path) if asset_exists(sdf_asset_path) else None
-            if texture is None:
+            if texture is None and not read_only:
                 imported = import_one(face_sdf, self.names["texture_root"], destination_name=face_sdf.stem)
                 texture = imported[0] if imported else load(sdf_asset_path)
             if texture:
-                configure_texture(texture, face_sdf, "face_sdf")
+                if not read_only:
+                    configure_texture(texture, face_sdf, "face_sdf")
                 texture_map[face_sdf.stem.lower()] = texture
         self.texture_map = texture_map
         self.imported = True
@@ -380,18 +408,30 @@ class BuildContext:
         return self.texture_map.get(str(key).lower())
 
     def default_texture(self, role: str):
-        """A compile-safe default for a texture parameter, from the map then any import.
+        return self.neutral_texture(role)
 
-        Normal/mask samplers cannot use the engine's colour DefaultTexture, so
-        those roles only fall back to imported textures and otherwise return
-        None (callers must supply a matching texture before creating the node).
-        """
-        texture = self.texture_for(self.material_map.get("defaults", {}).get(role))
-        if texture is not None:
-            return texture
-        if role in ("base_color", "toon_ramp"):
-            return self.engine_default_texture()
-        return None
+    def neutral_texture(self, role, create=True):
+        if role in self._neutrals:
+            return self._neutrals[role]
+        name = "T_PMX4UE_Neutral_" + role
+        path = f"{self.names['texture_root']}/Defaults/{name}"
+        texture = load(path) if asset_exists(path) else None
+        if texture is None and create:
+            source = self.artifact() / "material_defaults" / (name + ".png")
+            source.parent.mkdir(parents=True, exist_ok=True)
+            data = neutral_png(role)
+            if source.exists() and source.read_bytes() != data:
+                raise BuildError(f"Neutral input changed unexpectedly: {source}")
+            if not source.exists():
+                source.write_bytes(data)
+            imported = import_one(source, f"{self.names['texture_root']}/Defaults", destination_name=name)
+            texture = imported[0] if imported else load(path)
+            if texture:
+                configure_texture(texture, source, role)
+        if not isinstance(texture, unreal.Texture2D):
+            raise BuildError(f"Typed neutral texture missing: {path}")
+        self._neutrals[role] = texture
+        return texture
 
     def engine_default_texture(self):
         for engine_path in ("/Engine/EngineResources/WhiteSquareTexture", "/Engine/EngineResources/DefaultTexture"):

@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import sys
 import time
+import uuid
 
 ROOT = Path(__file__).resolve().parent
 LEGACY = ROOT / "tools/legacy"
@@ -23,7 +24,7 @@ STAGES = ("audit", "capabilities", "export", "skeleton-audit", "skeleton-plan", 
           "material-draft", "material-check", "ue-build", "ue-validate", "material-compile", "ik", "retarget-pose", "animation-export",
           "physics-inventory", "physics-inspect", "physics-plan", "physics-build",
           "physics-test", "performance")
-STAGES += ("face-sdf",)
+STAGES += ("face-sdf", "material-preview", "material-build", "material-preflight", "delivery-check")
 
 
 def read(path):
@@ -87,6 +88,8 @@ def initialize(args):
                        rig_profile=str(dest.parent / "rig.json"),
                        retarget_pose_profile=str(dest.parent / "retarget_pose.json"),
                        animation_export_profile=str(dest.parent / "animation_export.json"),
+                       material_preview_profile=str(dest.parent / "material_preview.json"),
+                       material_preview_run="v1",
                        physics_profile=str(dest.parent / "physics.json"))
     write(dest, c)
     return {"config": str(dest), "next": "doctor, then audit; review source scale before export"}
@@ -163,7 +166,24 @@ def recipe(c, project, a, stage):
                 "-ini:EditorSettings:[/Script/UnrealEd.EditorPerformanceSettings]:bThrottleCPUWhenNotForeground=False"] if pie else ["-run=pythonscript"]),
                 flag + str(ROOT / "tools/ue_entry.py"), "-unattended", "-nop4", "-nosplash"]
 
-    if stage == "face-sdf":
+    if stage == "delivery-check":
+        require(p.get("delivery_profile"), "Set delivery_profile to the reviewed asset/effect manifest")
+        internal = "delivery"
+        inputs = [Path(p["delivery_profile"])]
+    elif stage == "material-preflight":
+        env.update(PMX4UE_OUTPUT=str(out))
+        argv = ue(ROOT / "tools/ue_material_preflight.py") + ["-AllowCommandletRendering"]
+    elif stage == "material-preview":
+        require(p.get("material_preview_profile"), "Set material_preview_profile after visual test planning")
+        run_name = p.get("material_preview_run", "v1")
+        require(re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", run_name), "Invalid material_preview_run")
+        out = a / "material_previews" / run_name / "material_preview.json"
+        outputs = [out]
+        inputs = [Path(p["material_preview_profile"]), a / "material_compile.json"]
+        token = uuid.uuid4().hex
+        env.update(PMX4UE_PREVIEW_PROFILE=str(inputs[0]), PMX4UE_OUTPUT=str(out), PMX4UE_PREVIEW_TOKEN=token)
+        argv = ue(ROOT / "tools/ue_material_preview.py", pie=True) + ["-PMX4UEPreview=" + token]
+    elif stage == "face-sdf":
         require(p.get("face_sdf_profile"), "Set face_sdf_profile after face-axis review")
         inputs = [Path(p["face_sdf_profile"])]
         env.update(PMX4UE_FACE_SDF_PROFILE=str(inputs[0]), PMX4UE_OUTPUT=str(out))
@@ -211,14 +231,20 @@ def recipe(c, project, a, stage):
         inputs = [Path(c["paths"]["material_map"]), a / "blender_manifest.json"]
         outputs = []
         argv = [sys.executable, str(LEGACY / "mmd2ue.py"), "--project-root", str(project.parent), "check-map", "--config", str(config)]
-    elif stage in ("ue-build", "ue-validate"):
+    elif stage in ("ue-build", "material-build", "ue-validate"):
         require(p.get("material_reviewed") is True, "Agent must review material slots/textures first")
         require(p["skeleton_policy"] in ("preserve", "upper-only"), "Unsupported skeleton policy; extend adapter explicitly")
-        inputs = [Path(c["paths"].get("fbx", base_fbx)), Path(c["paths"]["material_map"]), a / "blender_manifest.json"]
-        if p["skeleton_policy"] == "upper-only":
+        inputs = [Path(c["paths"]["material_map"]), a / "blender_manifest.json"]
+        if not p.get("material_source_mesh"):
+            inputs.insert(0, Path(c["paths"].get("fbx", base_fbx)))
+        if p["skeleton_policy"] == "upper-only" and not p.get("material_source_mesh"):
             inputs += [a / "skeleton_apply.json"]
-        outputs = [a / ("ue_build_report.json" if stage == "ue-build" else "ue_validation.json")]
-        argv = ue(LEGACY / ("ue_build_character.py" if stage == "ue-build" else "ue_validate.py"))
+        outputs = [a / ("ue_validation.json" if stage == "ue-validate" else "ue_build_report.json")]
+        argv = ue(LEGACY / ("ue_validate.py" if stage == "ue-validate" else "ue_build_character.py"))
+        if stage == "material-build":
+            require(p.get("material_source_mesh"), "Set material_source_mesh to the retained mesh")
+            require(not p["material_source_mesh"].startswith(c["paths"]["ue_root"] + "/"), "Use a new variant separate from the retained mesh")
+            env["MMD2UE_BUILD_MODE"] = "material"
     elif stage == "ik":
         inputs = [Path(p["rig_profile"])]
         env.update(PMX4UE_RIG_PROFILE=str(inputs[0]), PMX4UE_OUTPUT=str(out))
@@ -257,11 +283,25 @@ def run(c, project, a, stage, execute=False, timeout=1800):
         return spec
     require(all(Path(f).is_file() for f in spec["inputs"]), "Missing stage inputs: " + str(spec["inputs"]))
     require(not any(Path(f).exists() for f in spec["outputs"]), "Outputs exist; inspect them or choose a new variant, no silent overwrite")
+    if stage == "material-preview":
+        from tools.material_preview_contract import validate
+        validate(read(spec["inputs"][0]), c["paths"]["ue_root"], c["pmx4ue"].get("material_source_mesh"))
+        require(read(spec["inputs"][1]).get("status") == "compiled_visual_pending", "Complete material-compile before preview")
     with project_lock(project):
         a.mkdir(parents=True, exist_ok=True)
         record = dict(spec, started=time.time(), status="running", config=c,
                       input_sha256={f: sha(f) for f in spec["inputs"]},
                       code_sha256={str(f.relative_to(ROOT)): sha(f) for f in [Path(__file__), *ROOT.glob("tools/**/*.py")]})
+        if stage == "material-build":
+            paths = [c["pmx4ue"]["material_source_mesh"], *c["pmx4ue"].get("material_texture_assets", {}).values()]
+            record["asset_sha256"] = {}
+            for asset in paths:
+                require(isinstance(asset, str) and re.fullmatch(r"/Game/[A-Za-z0-9_/]+(?:\.[A-Za-z0-9_]+)?", asset), "Retained input must be a saved /Game asset")
+                filename = project.parent / "Content" / (asset.split('.')[0][6:] + ".uasset")
+                require(filename.is_file(), "Retained input file missing: " + str(filename))
+                for candidate in (filename, filename.with_suffix('.uexp'), filename.with_suffix('.ubulk')):
+                    if candidate.is_file():
+                        record["asset_sha256"][str(candidate)] = sha(candidate)
         record_path = a / "runs" / f"{time.time_ns()}_{stage}.json"
         log = record_path.with_suffix(".log")
         write(record_path, record)
@@ -271,6 +311,12 @@ def run(c, project, a, stage, execute=False, timeout=1800):
                 write(spec["outputs"][0], build_source_audit(c, project.parent))
             elif spec["internal"] == "draft":
                 write(spec["outputs"][0], build_material_map_draft(c, read(spec["inputs"][0])))
+            elif spec["internal"] == "delivery":
+                from tools.delivery_contract import review_delivery
+                verdict = review_delivery(read(spec["inputs"][0]), project)
+                write(spec["outputs"][0], verdict)
+                record["evidence_sha256"] = verdict["evidence_sha256"]
+                require(verdict["status"] == "evidence_complete_needs_human_judgment", "Delivery incomplete; see delivery_check.json")
             else:
                 with log.open("w", encoding="utf-8") as stream:
                     result = subprocess.run(spec["argv"], env={**os.environ, **spec["env"]},
@@ -282,6 +328,16 @@ def run(c, project, a, stage, execute=False, timeout=1800):
                 record["import_risks"] = sorted({token for token in ("invalid bind poses", "zero length normal")
                                                   if token in text.lower()})
             require(Path(spec["outputs"][0]).is_file() if stage == "performance" else all(Path(f).is_file() for f in spec["outputs"]), "Process ended without expected output")
+            if stage == "material-build":
+                require(all(Path(f).is_file() and sha(f) == value for f, value in record["asset_sha256"].items()),
+                        "Retained mesh/texture changed during material-only build")
+            if stage == "material-preview":
+                from tools.material_preview_contract import verify_report
+                preview = read(spec["outputs"][0])
+                require(preview.get("profile_sha256") == record["input_sha256"][spec["inputs"][0]], "Preview profile changed during execution")
+                verify_report(preview)
+                record["capture_sha256"] = {r["image"]["path"]: r["image"]["sha256"] for r in preview["captures"]}
+                record["asset_sha256"] = preview["input_assets"]["game_package_sha256"]
             if stage == "performance":
                 from tools.review_physics_benchmark import review
                 raw = read(spec["outputs"][0])
@@ -309,7 +365,9 @@ def status(a):
     rows = []
     for path in sorted((a / "runs").glob("*.json")):
         row = read(path)
-        stale = [f for f, value in {**row.get("input_sha256", {}), **row.get("output_sha256", {})}.items()
+        stale = [f for f, value in {**row.get("input_sha256", {}), **row.get("output_sha256", {}),
+                                  **row.get("capture_sha256", {}), **row.get("asset_sha256", {}),
+                                  **row.get("evidence_sha256", {})}.items()
                  if not Path(f).is_file() or sha(f) != value]
         rows.append(dict(stage=row["stage"], status=row["status"], changed_files=stale, record=str(path)))
     return {"runs": rows, "note": "Execution is not visual acceptance. Changed inputs require agent review before reuse."}

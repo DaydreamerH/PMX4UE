@@ -11,23 +11,25 @@ from pathlib import Path
 import argparse
 import sys
 import numpy as np
-from io_scene_fbx import parse_fbx, encode_bin
+from io_scene_fbx import parse_fbx, encode_bin, data_types
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from fbx_property_types import encoder_methods
 
 def children(node, key):
     return [e for e in node.elems if e.id == key]
 
-def encoder(elem, overrides):
+def encoder(elem, overrides, methods=None):
     dst = encode_bin.FBXElem(elem.id)
-    methods = {b'Y': 'int16', b'C':'bool', b'I':'int32', b'L':'int64', b'F':'float32', b'D':'float64',
-               b'R':'bytes', b'S':'string', b'f':'float32_array', b'd':'float64_array', b'l':'int64_array',
-               b'i':'int32_array', b'b':'bool_array', b'c':'byte_array'}
+    if methods is None:
+        methods = encoder_methods(data_types, encode_bin.FBXElem)
     values = overrides.get(id(elem), elem.props)
+    if len(values) != len(elem.props_type):
+        raise ValueError("FBX property/type count mismatch")
     for typ, value in zip(elem.props_type, values):
-        key = bytes([typ])
-        if key not in methods:
-            raise ValueError("Unsupported FBX property: " + repr(key))
-        getattr(dst, 'add_'+methods[key])(value)
-    dst.elems = [encoder(child, overrides) for child in elem.elems]
+        if typ not in methods:
+            raise ValueError("Unsupported FBX property: " + repr(bytes([typ])))
+        getattr(dst, methods[typ])(value)
+    dst.elems = [encoder(child, overrides, methods) for child in elem.elems]
     return dst
 
 def normalize(source, destination, orthogonalize=True):
@@ -114,6 +116,8 @@ def normalize(source, destination, orthogonalize=True):
     return dict(status="bind_precision_normalized" if orthogonalize else "relative_only_diagnostic", cluster_count=len(residuals),
                 max_residual_before=max(residuals), max_residual_after=max(new_residuals),
                 max_basis_element_change=max_basis_change, serialized_fields_verified=True,
+                codec_module=str(Path(data_types.__file__).resolve()),
+                codec_types={chr(k): v for k, v in encoder_methods(data_types, encode_bin.FBXElem).items()},
                 raw_fbx=str(source), output_fbx=str(destination),
                 changed_fields="Cluster relative matrix" if not orthogonalize else 'Pose/Link near-unit rotation orthogonality and relative matrices; positions, topology, weights untouched')
 

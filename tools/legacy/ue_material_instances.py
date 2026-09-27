@@ -10,6 +10,7 @@ import unreal
 
 from ue_context import BuildError, asset_exists, load
 from mmd2ue_core import TEXTURE_PARAMETER_NAMES
+from material_input_policy import effective_scalars
 
 TOON_SPHERE_STEMS = {
     "toon01", "toon02", "toon03", "toon04", "toon05", "toon06", "toon07", "toon08",
@@ -65,6 +66,29 @@ def special_masters_for(ctx, master, eye_add=None, eye_multiply=None, invisible=
 
 def create_instance(ctx, master, entry: dict, special_masters: dict | None = None):
     slot_name = entry["slot"]
+    kind = ctx.special_kind_for_slot(slot_name) or "master"
+    parents = {"master": master, **(special_masters or {})}
+    parent = parents.get(kind)
+    if parent is None:
+        raise BuildError(f"No built parent {kind!r} for {slot_name!r}; refusing silent Master fallback")
+    strict_parameters = kind in {"stocking", "cloth"} or kind in ctx.material_map.get("parent_assets", {})
+    supported_textures = {str(n) for n in unreal.MaterialEditingLibrary.get_texture_parameter_names(parent)}
+    unsupported_roles = [r for r, value in entry["textures"].items() if value and r not in TEXTURE_PARAMETER_NAMES]
+    if unsupported_roles:
+        raise BuildError(f"{slot_name}: no texture adapter for {unsupported_roles}; implement explicitly, do not silently drop source data")
+    if strict_parameters:
+        # A dedicated graph is not the universal master: only its real contract
+        # can be configured. Reject dead profile knobs before creating an asset.
+        profile = ctx.material_map["profiles"][entry["profile"]]
+        overrides = entry.get("overrides") or {}
+        for category, query in (("scalars", "get_scalar_parameter_names"), ("vectors", "get_vector_parameter_names")):
+            declared = set(profile.get(category, {})) | set(overrides.get(category, {}))
+            supported = {str(n) for n in getattr(unreal.MaterialEditingLibrary, query)(parent)}
+            if declared - supported:
+                raise BuildError(f"{slot_name}/{kind}: unsupported {category}: {sorted(declared-supported)}; use a graph-specific profile")
+        declared_textures = {TEXTURE_PARAMETER_NAMES[r] for r, value in entry["textures"].items() if value}
+        if declared_textures - supported_textures:
+            raise BuildError(f"{slot_name}/{kind}: texture roles not consumed by parent: {sorted(declared_textures-supported_textures)}")
     name = material_asset_name(slot_name)
     asset_name = f"{ctx.names['instance_prefix']}_{name}"
     asset_path = f"{ctx.names['material_root']}/{asset_name}"
@@ -80,8 +104,6 @@ def create_instance(ctx, master, entry: dict, special_masters: dict | None = Non
     if not isinstance(instance, unreal.MaterialInstanceConstant):
         raise BuildError(f"{asset_path} exists but is not a MaterialInstanceConstant")
 
-    kind = ctx.special_kind_for_slot(slot_name)
-    parent = (special_masters or {}).get(kind, master)
     unreal.MaterialEditingLibrary.set_material_instance_parent(instance, parent)
     try:
         unreal.MaterialEditingLibrary.clear_all_material_instance_parameters(instance)
@@ -102,19 +124,20 @@ def create_instance(ctx, master, entry: dict, special_masters: dict | None = Non
 
     for role, parameter in TEXTURE_PARAMETER_NAMES.items():
         key = entry["textures"].get(role)
-        if not key:
+        if parameter not in supported_textures:
+            if key:
+                raise BuildError(f"{slot_name}: declared {role} is not consumed by {kind}")
             continue
-        texture = ctx.texture_for(key)
+        texture = ctx.texture_for(key) if key else ctx.neutral_texture(role)
         if texture is None:
             raise BuildError(f"mapped texture {key!r} for slot {slot_name!r} was not imported")
         unreal.MaterialEditingLibrary.set_material_instance_texture_parameter_value(instance, parameter, texture)
-
-    # Materials with no base texture use a white default so the profile/override
-    # Tint alone drives the colour (solid-colour PMX materials, effect shells).
-    if not entry["textures"].get("base_color"):
-        white = ctx.engine_default_texture()
-        if white is not None:
-            unreal.MaterialEditingLibrary.set_material_instance_texture_parameter_value(instance, "BaseColorTexture", white)
+        actual = unreal.MaterialEditingLibrary.get_material_instance_texture_parameter_value(instance, parameter)
+        if actual is None or actual.get_path_name() != texture.get_path_name():
+            raise BuildError(f"{slot_name}: {parameter} did not bind the intended input")
+        ctx.input_audit.append(dict(slot=slot_name, role=role, parameter=parameter,
+                                    source="declared" if key else "generated_neutral", key=key,
+                                    expected=texture.get_path_name(), actual=actual.get_path_name()))
 
     for parameter, value in profile.get("scalars", {}).items():
         unreal.MaterialEditingLibrary.set_material_instance_scalar_parameter_value(instance, parameter, float(value))
@@ -133,7 +156,15 @@ def create_instance(ctx, master, entry: dict, special_masters: dict | None = Non
             instance, parameter, unreal.LinearColor(*value)
         )
 
+    scalars, debt = effective_scalars(entry, profile, kind)
+    for parameter, value in scalars.items():
+        unreal.MaterialEditingLibrary.set_material_instance_scalar_parameter_value(instance, parameter, float(value))
+    ctx.material_debt.extend(debt)
+
     unreal.EditorAssetLibrary.save_loaded_asset(instance)
+    actual_parent = instance.get_editor_property("parent")
+    if actual_parent is None or actual_parent.get_path_name() != parent.get_path_name():
+        raise BuildError(f"{slot_name}: parent assignment did not persist")
     return instance
 
 

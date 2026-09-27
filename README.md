@@ -34,6 +34,12 @@ PMX4UE/
 
 ## 开始使用
 
+材质迭代新增 [小实验与交付规程](docs/material-iteration-and-delivery.md)：`material-preflight` 探测采样/API、`material-build` 复用网格构建新材质、`delivery-check` 复核版本组合与效果证据。逐槽实际输入读回、中性默认纹理和未完成效果记录防止串槽与无声降级。这些新增实现尚未运行测试或 UE 验证，不是新的视觉效果通过记录。
+
+材质视觉闭环见 [材质工作流](docs/agent-material-workflow.md)：`material-preview` 在自有新编辑器与隔离关卡完成固定视角 A/B 截图，不清理当前场景；图片完整与视觉认可分别记录。该新增采集路径仍待独立 UE 工程验证，见 `VERIFICATION.md`。
+
+材质实现先看 [材质族设计](docs/material-families.md)：通用 Master 仅是基线，眼睛各层、头发、脸部、丝袜、织物、描边等按实际行为选择/编写专用实现。支持显式 stocking/cloth 构建路由与自定义父图注册；未知路由不再静默回退，专用图参数须与其实际接口一致。
+
 依赖：Python 3.10+；Blender 3.6 与可用的 mmd_tools；UE 5.8 系列；构建插件需要匹配的 C++ 编译工具。其它版本应由 agent 先检查 API，必要时做版本适配。工具不替你下载软件或第三方素材。
 
 在本目录执行，以下路径替换为本机实际路径：

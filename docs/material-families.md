@@ -1,0 +1,104 @@
+# 角色级材质设计，而不是基础贴色交付
+
+## 目标与结构
+
+默认目标是与参考风格匹配的角色材质，不是所有槽挂一个通用父材质后改颜色。`material-check`、编译或材质实例数量都不能证明完成。先填写 `templates/material-design.md`，再决定使用现有图、独立父材质、共享 Material Function、额外几何层还是受控后处理。
+
+**按渲染行为拆分，而不是按 Master 数量考核。** 粗糙度/颜色不同的同类织物可以共享图；脸部、虹膜/眼睛叠层、头发、丝袜、透明件和描边通常需要不同的计算或 Pass。共享函数可复用光照/采样逻辑，但 Blend Mode、Shading Model、Domain、双面/深度策略不同不能靠普通标量参数冒充。把通用图复制数份换名字，同样不算完成专用实现。
+
+建议资产组织（按真实需求增减，不先创建空资产）：
+
+```text
+<角色版本>/Materials/
+  Functions/             被多个材质真正复用的计算
+  Parents/               Face、Hair、EyeBase、EyeAdd、EyeShadow、Stocking、Cloth...
+  Instances/             各槽与局部风格参数
+  Effects/               Outline、DepthRim 等独立渲染内容
+  Lookdev/<实验版本>/      单项 A/B，保留已认可基线
+```
+
+现有自动构建器仍把产物存入 `Materials`；上述子目录是显式自定义构建的建议，不是假装现有工具已经自动重排资产。源纹理放角色 Textures；不要为目录整齐移动既有资产或破坏引用。
+
+## 各类型的设计与验收
+
+根据实际槽、几何和纹理判断以下类型是否存在。每个存在的类型都要有实现方案；不存在写 N/A 并给依据。不能单凭英文槽名判定，也不能因为脚本标了 optional 就忽略用户期望。
+
+| 类型 | 应研究/实现的视觉差异 | 必要证据与专项验收 |
+|---|---|---|
+| 脸部/皮肤 | 干净的明暗形状、脸部 SDF 阴影，资源允许时鼻唇定向高光；身体皮肤与脸部策略可不同 | 检查 SDF 实际 RGBA 含义与 UV，不把普通 alpha 当 SDF；侧光正反、近景、头部转动后轴跟随；避免身体噪声法线污染脸 |
+| 头发主体 | 成束高光、视角偏移/各向异性、适当的宏观法线与发丝遮罩 | 高光贴图通道、UV1 是否存在且发束有一致方向；旋转角色、改变相机俯仰，不能只在默认世界朝向成立 |
+| 刘海 | 头发主体之外的脸部投影、眉眼可见性、半透明排序 | 是否有独立几何/槽与遮罩，Stencil/CustomDepth 分配及遮挡关系；从正面/侧面看，不能整片透明暴露后脑或叠层闪烁 |
+| 眼白/虹膜 | 分别控制眼白明暗、虹膜层次、内凹视差或合理的替代方案 | 先检查眼球几何是否已有内凹/凸壳；无层几何不能宣称复现四层眼睛。近景左右视角与转头，避免虹膜滑出眼眶 |
+| 眼睛高光/阴影层 | 高光加法、阴影调制/乘法或经论证的近似；保留层级深度与遮罩 | 明确高光/阴影实际槽，验证最终混合与透明排序；`EyeGlow` 并不等于视差、高光层或上眼睑阴影 |
+| 黑丝/白丝/有色袜 | 掠射角纤维厚度感、受控高光、纤维方向；边缘颜色由实际材质决定 | 源颜色、覆盖遮罩、皮肤底层是否存在；白丝不能套黑丝 Tint，边缘偏色不是几何厚度。腿部前侧近景、弯腿/转身、高光不随世界轴滑动 |
+| 棉布/厚织物/丝绸 | 不同粗糙度及高光宽度，必要时 diffuse/specular ramp 或织物 sheen | RMO 各通道实测、纹理色彩空间和织物方向；同光照下与皮肤、皮革明显区分，不用整体发光掩盖照明问题 |
+| 皮革/橡胶 | 非金属的窄/宽高光、表面细节与轮廓响应 | 不为“更亮”乱加 metallic；近景高光与暗部层次、法线强度适合模型比例 |
+| 金属/硬质配饰 | 金属度与反射环境、不同粗糙度和边缘行为 | 反射环境缺失与材质错误分开；不能沿用衣物的发光/染色补偿 |
+| 玻璃/宝石/透明件 | 明确透明、折射或风格化替代，深度/排序与双面策略 | 是否真的需要透明、后面是什么；多角度交叠及开销，不默认把眼睛所有层做成玻璃 |
+| 描边 | 外轮廓、脸/眼眶/刘海局部线条控制、不同材质的宽度/颜色 | 平滑法线数据从哪里来，近远距离、不同 FOV/宽高比、正侧脸；不要把 WPO 近似叫严格屏幕等宽 |
+| 边缘光 | 受光方向、遮挡、材质区域和轮廓宽度控制 | Fresnel 与深度轮廓光分开命名；检查角色交叠和背景边界，不能把整个场景/眼睛一起染亮 |
+| Tonemapping/曝光 | 让材质在统一曝光与色调映射下成立 | 固定工程基线，先调材质；更换 ACES/GT 等是整体渲染决策，不能在导入脚本中偷偷修改 |
+
+## 当前可复用实现与真实差距
+
+相对路径均以工作台为根。先读对应函数，不运行历史角色脚本或依赖它们的资产。
+
+| 入口 | 当前实际内容 | 不能由此声称完成的部分 |
+|---|---|---|
+| `tools/legacy/ue_master_material.py:create_master` | 通用基线图，含脸部 SDF、UV1 头发高光和其它可调分支 | 分支存在不代表当前槽启用且正确；当前头发视向分量需审核世界/角色空间，球形法线也不能套用旧角色中心 |
+| `tools/ue_face_sdf_workflow.py`、`docs/face-sdf-runtime.md` | 头骨轴校准和每实例运行时驱动的独立流程 | 静态截图不能验证动态驱动；普通网格预览不包含驱动组件 |
+| `ue_master_material.py:create_eye_blend` | 独立 Unlit Additive/Modulate 父材质 | 不生成内凹眼球或四层几何；UE Modulate 的结果与文章 Blend DstColor Zero 需实测比较，不能直接等同 |
+| `ue_master_material.py:create_bang_passes` | 创建刘海相关候选材质 | 创建材质不等于完成额外绘制层/模板配置；需专门实例/渲染接入和排序验收 |
+| `tools/legacy/ue_feature_stocking.py:build` | 独立 Masked Default-Lit、视角边缘偏色及自定义各向异性宏观高光 | 高光加到 Emissive，不是修改 UE 的原生 BRDF；未自动继承全部光源阴影/强度。角色局部常量纤维方向也不等于随每根腿骨变形的切线 |
+| `tools/legacy/ue_feature_cloth.py:build` | 独立 Default-Lit、漫反射 ramp 与归一化 GGX 形状的风格化附加高光 | 不是完整替换引擎 Cook–Torrance；需要 ramp 和实际通道，默认粗糙度不能当丝绸/棉布最终结论 |
+| `tools/legacy/ue_feature_outline.py:build` | 距离补偿 WPO、反面轮廓、脸部 UV 区域抑制候选 | 不是文章的 clip-space 等宽或深度埋入修正；默认脸部 UV 区域是示例，应按本角色重做 |
+| `tools/legacy/ue_feature_depth_rim.py:build(..., apply_in_level=False)` | CustomDepth 四邻域轮廓差与 Stencil 选择 | 不是法线方向偏移采样，也没有自动满足文章中受光侧约束；需分析深度空间、遮挡和光向，不能当成普通 Fresnel 替代 |
+
+这些是可改写的实现起点，不是能力上限。资源齐全但工具欠缺时，在工作台中编写新的族材质构建函数或 UE 适配器；记录计算空间、输入、参数和真正的输出 Pass。涉及引擎改造、增加几何层或全局渲染配置时先判断任务授权及代价。资源缺失则考虑基于本模型生成 ramp/遮罩、合理近似或向用户确认，不能停止在基线后宣称完成。
+
+## 显式路由：防止再次回到同一个 Master
+
+`material_map` 的 `parent` 现在实际支持以下路由：
+
+- `master` 或未指定：现有通用基线。
+- `eye_add`、`eye_multiply`、`glass`、`invisible`、`additive`：已有专用父材质。
+- `stocking`、`cloth`：在 `ue-build` 中先构建专用图，再创建和绑定实例。缺 ramp/输入时失败，不静默跳过。
+- `parent_assets` 中显式注册的别名：加载 agent 已在独立路径创建的自定义父材质；例如 `hair_custom`、`face_custom`、`iris_custom`。不能覆盖内置别名。
+
+示意（合入真实 material_map，而不是单独当作完整配置运行）：
+
+```json
+{
+  "parent_assets": {
+    "hair_custom": "/Game/PMX4UE/Character/v1/Materials/Parents/M_Hair_v1"
+  },
+  "profiles": {
+    "white_stocking_graph": {
+      "scalars": {"StockingEdgeIntensity": 0.2, "StockingHighlightStrength": 0.15, "StockingRoughnessBase": 0.5},
+      "vectors": {"Tint": [1,1,1,1], "StockingEdgeTint": [0.85,0.85,0.85,1]}
+    }
+  },
+  "slots": [
+    {"slot":"<实际袜类槽>", "parent":"stocking", "profile":"white_stocking_graph",
+     "textures":{"base_color":"<实际颜色纹理键>", "normal":"<实际或中性法线键>", "rmo":"<实际或中性数据键>"}}
+  ]
+}
+```
+
+以上数值仅说明配置语法，不是白丝的最终推荐。`specials.cloth.ramp` 选择已导入的 ramp 纹理键；专用图参数可查相应构建函数。通用 `stocking/cloth` 旧预设含大量只在旧 Master 存在的参数，**不能整套拷贝到新父材质**。新专用/自定义路由会拒绝不存在的标量、向量和已声明纹理参数，促使 agent 建立真正的参数接口。默认纹理要有正确采样类型；每个袜类/布料槽明确绑定实际或中性 Normal/RMO，不能继承首个槽的另一套花纹。
+
+自定义父图沿用 `TEXTURE_PARAMETER_NAMES` 中的语义接口，例如 BaseColorTexture/NormalTexture/RMOTexture；不同接口需要显式适配构建器和验证器。`parent_assets` 只加载不重写父图。不要先指向不存在的资产然后期待工具替你生成它；自定义构建代码和输入必须随工作流交接。
+
+父路由冲突/未注册现在会失败；`ue_validate` 核对实际父路径，并检查新专用图的声明标量。手动使用旧 feature 脚本改父后，也要同步 material_map，否则下次构建会按旧方案恢复，且验证应报告不一致。旧工作单升级到新路由时使用新资产版本；不要对已认可资产直接重建。
+
+## 完成标准与后续 agent 的责任
+
+1. 提交可读的 **材质设计表**：每个真实槽是什么材料、选哪个图/层、输入证据、哪些效果必须实现、哪些是有理由的 N/A。
+2. 完成每个目标效果的实现和接入。不能以 `features.required=false`、缺现成按钮或“不影响颜色”自动降级。未完成项保留 blocked/pending 并说明下一步。
+3. 每类建立至少有区分度的局部 A/B：眼睛/头发近景、袜子前侧、高光随视角/光向、描边近远/宽高比。共享图的路径也必须展示不同计算确实生效。
+4. 按 `agent-material-workflow.md` 的隔离采集与 `material-review.md` 实际看图。最终材质父路径与参数读回对应到设计表；资产/参数变更后旧图作废。
+5. 交付状态写明 `baseline_only`、`lookdev_in_progress`、`visual_reviewed_with_gaps` 或 `visual_accepted_in_scope`（人工语义，不是新增 runner 自动状态）。颜色大体正确但族材质/高光/层次未实现，只能算前两者。
+
+参考来源：用户提供的旅人《少前2-PBR+NPR角色渲染笔记》文本，作为效果与方法参考，非 UE 原生实现保证。所贴文本中的“效果图”只有文字占位，未包含对应图片，不能据此声称做过参考图视觉匹配。文章中的 Unity 轴向、UV、光照访问、投影/深度、Blend/Stencil 和 Tonemapping 都要重新映射到实际 UE 版本；本文只整理设计目标，没有复制成未经验证的 UE shader。
+
+本地经验核对：Cecilia 历史 stocking 报告明确使用独立 Stocking_PBR 父材质并保留逐槽纹理；托洛洛历史配置要求轮廓、局部近景和多角度灯光。这支持“交付不止通用贴色”的要求，但这些案例的纹理、色调、UV、额外绘制层不能成为新角色的硬编码。工作流在另一工程中应仅凭自己的源码/输入/配置完成重建。

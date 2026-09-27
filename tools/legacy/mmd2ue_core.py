@@ -26,6 +26,7 @@ REPORT_SCHEMA = "mmd2ue.source-audit.v1"
 PLAN_SCHEMA = "mmd2ue.execution-plan.v1"
 MATERIAL_MAP_SCHEMA = "mmd2ue.material-map.v3"
 MATERIAL_MAP_SCHEMAS = {"mmd2ue.material-map.v2", "mmd2ue.material-map.v3"}
+MATERIAL_PARENT_KINDS = {"master", "eye_add", "eye_multiply", "additive", "invisible", "glass", "stocking", "cloth"}
 TEXTURE_EXTENSIONS = {
     ".png", ".jpg", ".jpeg", ".bmp", ".tga", ".tif", ".tiff", ".dds", ".exr",
     ".spa", ".sph",
@@ -633,6 +634,7 @@ def normalize_material_map(
         "slots": slots,
         "defaults": defaults,
         "specials": material_map.get("specials", {}) or {},
+        "parent_assets": material_map.get("parent_assets", {}) or {},
         "policies": material_map.get("policies", {}) or {},
     }
 
@@ -647,12 +649,46 @@ def validate_material_map(normalized: dict) -> list[dict]:
         issue("error", "no_slots", "material map resolved to zero slots")
     seen = set()
     profiles = normalized.get("profiles", {})
+    parent_assets = normalized.get("parent_assets", {})
+    if not isinstance(parent_assets, dict):
+        issue("error", "invalid_parent_assets", "parent_assets must map aliases to saved /Game material paths")
+        parent_assets = {}
+    for alias, path in parent_assets.items():
+        if not isinstance(alias, str) or alias in MATERIAL_PARENT_KINDS or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", alias):
+            issue("error", "invalid_parent_alias", f"invalid/reserved material parent alias: {alias}")
+        if not isinstance(path, str) or not re.fullmatch(r"/Game/[A-Za-z0-9_/]+(?:\.[A-Za-z0-9_]+)?", path):
+            issue("error", "invalid_parent_path", f"parent alias {alias} needs an explicit saved /Game asset path")
     allow_plain = {"glass", "emotion", "hidden"}
+    texture_types = {}
     for slot in normalized.get("slots", []):
         name = slot["slot"]
         if name in seen:
             issue("error", "duplicate_slot", f"slot appears more than once: {name}")
         seen.add(name)
+        for role, value in slot["textures"].items():
+            if value and role not in TEXTURE_PARAMETER_NAMES:
+                issue("error", "unsupported_texture_role", f"{name}: {role} has no current texture adapter; implement it or document an explicit material-map decision")
+            if value:
+                category = "normal" if role == "normal" else ("color" if role in {"base_color", "toon_ramp", "sphere_map"} else "mask")
+                key = str(value).lower()
+                if key in texture_types and texture_types[key] != category:
+                    issue("error", "conflicting_texture_types", f"{key}: incompatible sampler roles; create separately configured assets")
+                texture_types[key] = category
+        assignments = [kind for kind, slots in normalized.get("specials", {}).items()
+                       if isinstance(slots, (list, tuple)) and name in slots]
+        if slot.get("parent") and not isinstance(slot["parent"], str):
+            issue("error", "invalid_parent", f"slot {name!r}: parent must be a route name")
+        elif slot.get("parent"):
+            assignments.append(slot["parent"])
+        if len(set(assignments)) > 1:
+            issue("error", "conflicting_parents", f"conflicting parent routes for {name}: {assignments}")
+        for kind in assignments:
+            if kind not in MATERIAL_PARENT_KINDS and kind not in parent_assets:
+                issue("error", "unknown_parent", f"slot {name!r}: parent {kind!r} is not registered; no Master fallback")
+            if kind in {"stocking", "cloth"}:
+                for role in ("normal", "rmo"):
+                    if not slot["textures"].get(role):
+                        issue("error", "missing_family_texture", f"{name}/{kind}: explicitly bind {role} or a reviewed neutral texture; do not inherit another slot's detail map")
         profile = slot.get("profile")
         if profile in (None, "unassigned"):
             issue("error", "unassigned_profile", f"slot {name!r} has no approved profile")

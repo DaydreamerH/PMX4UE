@@ -65,7 +65,7 @@ def _resolve_ramp(ctx: BuildContext):
     return None
 
 
-def build(ctx: BuildContext) -> dict:
+def build(ctx: BuildContext, reparent: bool = True, slots=None) -> dict:
     ramp_texture = _resolve_ramp(ctx)
     if ramp_texture is None:
         return {"status": "skipped", "reason": "no cloth ramp texture available"}
@@ -81,7 +81,8 @@ def build(ctx: BuildContext) -> dict:
         return tuple(special_vectors.get(name, default))
 
     families = set(options.get("families", CLOTH_FAMILIES))
-    entries = [entry for entry in ctx.slot_entries() if entry.get("profile") in families]
+    entries = [entry for entry in ctx.slot_entries() if
+               (entry["slot"] in slots if slots is not None else entry.get("profile") in families)]
     if not entries:
         return {"status": "skipped", "reason": "no cloth-family slots"}
 
@@ -228,7 +229,7 @@ return saturate((roughness2 * roughness2) / (d * d));
     unreal.EditorAssetLibrary.save_loaded_asset(material, False)
 
     reparented = []
-    for entry in entries:
+    for entry in entries if reparent else []:
         name = f"{ctx.names['instance_prefix']}_{material_asset_name(entry['slot'])}"
         instance = unreal.EditorAssetLibrary.load_asset(f"{root}/{name}")
         if not isinstance(instance, unreal.MaterialInstanceConstant):
@@ -243,6 +244,8 @@ return saturate((roughness2 * roughness2) / (d * d));
         "material": material.get_path_name(),
         "ramp": ramp_texture.get_path_name(),
         "reparented": reparented,
+        "selected_slots": [entry["slot"] for entry in entries],
+        "graph_only": not reparent,
         "diffuse": "N.L -> ramp row V=0.125",
         "specular": "normalized GGX D -> ramp row V=0.375",
     }

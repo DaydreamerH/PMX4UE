@@ -1,7 +1,7 @@
 {
   "schema": "mmd2ue.material-profiles.v1",
   "purpose": "Starting scalar/vector ranges for any PMX. Values are art-directable defaults, not final per-character tuning.",
-  "note": "Scales are consumed by M_MMD_*_Master and its instances. Family identity is expressed only through these parameters; the node graph is character independent.",
+  "note": "Legacy universal-master starting values, NOT the character-lookdev completion standard. Material family, parent graph/pass and evidence must be designed separately. Dedicated cloth/stocking/custom parents need graph-specific profiles; do not copy all these scalar keys or character-biased tints into them.",
   "profiles": {
     "face_skin": {
       "lighting": "face_sdf_or_smooth_npr",
