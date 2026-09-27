@@ -25,6 +25,15 @@ class WorkbenchTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "scale"):
             w.run(self.c, self.project, self.a, "export")
 
+    def test_retarget_pose_stage_is_explicit_and_dry(self):
+        spec = w.run(self.c, self.project, self.a, "retarget-pose")
+        self.assertTrue(spec["env"]["PMX4UE_SCRIPT"].endswith("ue_retarget_pose.py"))
+        self.assertEqual(spec["inputs"], [self.c["pmx4ue"]["retarget_pose_profile"]])
+        self.assertFalse(self.a.exists())
+        del self.c["pmx4ue"]["retarget_pose_profile"]
+        with self.assertRaisesRegex(ValueError, "retarget_pose_profile"):
+            w.run(self.c, self.project, self.a, "retarget-pose")
+
     def test_dry_run_no_writes_and_safe_arguments(self):
         self.c["pmx4ue"]["source_scale_reviewed"] = True
         spec = w.run(self.c, self.project, self.a, "export")

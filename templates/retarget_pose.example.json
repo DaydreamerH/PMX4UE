@@ -1,0 +1,27 @@
+{
+  "reviewed": false,
+  "retargeter": "/Game/PMX4UE/MyCharacter/v1/Rigs/RTG_SourceToTarget",
+  "output_retargeter": "/Game/PMX4UE/MyCharacter/v1/Rigs/RTG_TPose_v1",
+  "sides": {
+    "source": {
+      "pose_name": "PMX4UE_TPose_v1",
+      "auto_arms": true,
+      "up_axis": [0, 0, 1],
+      "arms": {
+        "left": ["upperarm_l", "lowerarm_l", "hand_l"],
+        "right": ["upperarm_r", "lowerarm_r", "hand_r"]
+      },
+      "edits": []
+    },
+    "target": {
+      "pose_name": "PMX4UE_TPose_v1",
+      "auto_arms": true,
+      "up_axis": [0, 0, 1],
+      "arms": {
+        "left": ["Arm_L", "Elbow_L", "Wrist_L"],
+        "right": ["Arm_R", "Elbow_R", "Wrist_R"]
+      },
+      "edits": []
+    }
+  }
+}

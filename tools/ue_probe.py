@@ -9,6 +9,7 @@ required = {
     "PMX4UEAgentMCPTools": ["inspect_material_compile", "capture_editor_viewport"],
     "IKRigController": ["get_controller"],
     "IKRetargeterController": ["get_controller"],
+    "PMX4UERetargetTools": ["inspect_retarget_pose"],
     "AutomationUtilsBlueprintLibrary": ["finish_all_asset_compilation"],
     "SkeletalMesh": ["get_bone_parent"],
 }

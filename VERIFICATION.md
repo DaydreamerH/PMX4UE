@@ -2,6 +2,62 @@
 
 日期：2026-09-26。此文件区分原工程经验与**复制后的独立工作流**实测。
 
+## 本轮提交与用户验收（2026-09-27）
+
+用户在查看 v5 后反馈“效果很好”，并要求提交这些尝试。将 v5 记为本模型当前用户认可的重定向基线；自动验证仍限于姿态、链配置、持久化及原资产不变，不扩展为所有动画均已验收。历史小节的“未提交/待验收”描述保留其当时状态，由本条补充最终交接结果。PMX4UE 提交工具、测试和决策记录；MMD2UE 单独提交最小编辑器接口、IK 模块依赖与 TPose_v1–v5 测试资产。源模型、源动画、材质及旧物理修改不在本次范围，不构成独立可迁移的完整角色包。
+
+## Spine v5 链语义对照（2026-09-27）
+
+在 MMD2UE 复制独立 v5 Target Rig 和 RTG，仅将目标 Spine 起点 Groove 改为 UpperBody，结束仍为 UpperBody2。Center 骨盆、腿链、Source Rig、双侧 v4 命名姿态、链映射、Op 顺序/开关保持；同步各 Op 的 Target Rig 引用。原 mesh/Skeleton/Rig/v4 RTG 文件哈希未变。生成和新进程重载均成功，姿态最大位置差 0 cm，旋转差 < 0.000004°；78 项现有回归测试通过。未播放验证动态效果，不宣称已解决行走偏移；根运动旧配置及其警告留待单独排查。报告：`Saved/PMX4UE/RetargetTPose_v5/spine.json` 和 `reload.json`。
+
+## T Pose v4 站姿匹配（2026-09-27，未提交）
+
+v3 仍存在 Source 外张/Target 收拢的中立姿态差异。新增审核方向驱动的腿段匹配，固定髋宽/骨长并保持脚掌组件旋转。原生读回 Source 踝间距 30.52171 → 12.49731 cm，Target 保持 10.92118 cm；两侧腿段方向误差 < 0.000001°，上身位置差 0 cm，脚掌旋转误差 0°。Source 脚踝下降约 0.324 cm。78 项测试通过。新资产 `Rigs/TPose_v4/RTG_UEFN_To_Tololo_TPose_v4`，详见 `characters/TololoSchool1001/tpose-v4-decision.md`。尚未确认鞋面贴合、蒙皮穿插或动态动画效果。
+
+## T Pose v3 下肢修正（2026-09-27，未提交）
+
+用户认可 v2 上半身，但下肢不合格。v2 仅审核腰颈连线不足以代表全身：共用父骨恢复后，D 腿/膝遗留约 41.53° / 2.13° 偏移导致腿部倾斜。v3 只恢复这四处 Retarget Pose 偏移，不改 mesh 或骨架；新资产在 `Rigs/TPose_v3/RTG_UEFN_To_Tololo_TPose_v3`。UE 原生髋踝倾斜约 44.685° → 3.51348°；上半身及其它不受影响骨骼位置差 0 cm。Source 未变。76 项纯逻辑测试通过；本轮仍需用户侧视和动画复核。详见 `characters/TololoSchool1001/tpose-v3-decision.md`。
+
+## MMD2UE T Pose v2 躯干修正（2026-09-27，未提交）
+
+- 用户确认 v1 呈 T 但目标后仰。定位为当前姿态继承的 Center / Groove / Waist / UpperBody 旋转偏移，不是 mesh 变更。
+- 通用工具支持显式恢复参考旋转，再计算手臂，并对审核的关节连线倾斜做写入前及 UE 原生读回检查。新增回归用例，75 项测试通过。
+- 新资产：`/Game/Characters/TololoSchool1001/Rigs/TPose_v2/RTG_UEFN_To_Tololo_TPose_v2`；两侧当前姿态为 `TPose_Source_v2` / `TPose_Target_v2`。
+- UE 原生目标腰颈连线倾斜 13.965632° → 0.570628°；Source 保留原有约 4.193159° 骨盆到颈连线倾斜，不强制两种体型具有相同曲线。双侧臂段最大方向误差 < 0.000003°。
+- 生成与独立新进程重载均退出 0。重载位置与保存时完全一致；原 mesh、Skeleton、Rig 和 v1 RTG 哈希保持不变，链映射及操作开关不变。
+- 按骨骼处理指引，本轮只更改命名重定向姿态。未生成新动画；视觉和动画审核仍待进行，保留既有根运动相关配置，不将静态数值验证称为全身动画验收。
+- 报告：主工程 `Saved/PMX4UE/RetargetTPose_v2/normalize.json`、`reload.json`。复现入口 `tools/ue_mmd2ue_tpose_v2.py`，决策记录 `characters/TololoSchool1001/tpose-v2-decision.md`。
+
+## MMD2UE 内双侧姿态规范化（2026-09-27，未提交）
+
+按用户要求撤回 `3d7b3e2` 并保留所有修改，PMX4UE HEAD 回到 `9fc9756`。后续实验默认使用 MMD2UE，不另建 UE 工程；此后的规则优先于下方历史空白工程记录。
+
+- 在 MMD2UEEditor 新增最小 `MMD2UERetargetTools` 读取接口，Development 编译通过，未安装整套 PMX4UE 插件。
+- 从原 `PhysicsSandbox/IK_Tololo_Mann` 创建新版本。Source 为真实 `SKM_UEFN_Mannequin`，Target 为用户认可的 `SK_TololoSchool1001_UpperOnlyCm_v1`。
+- 原目标 Rig 只有 Spine / LeftLeg / RightLeg。复制 Source 与 Target Rig，补齐 LeftArm / RightArm / LeftClavicle / RightClavicle / Neck / Head，形成 9 条已映射目标链。保留原脊柱/腿部映射与操作开关。
+- 生成 Source 的 `TPose_Source_v1` 与 Target 的 `TPose_Target_v1` 并设为当前姿态。只自动规范双臂方向，没有改 mesh、绑定姿态或腿骨。
+- 验收捕获到 UE `SetIKRig(Target)` 不同步 Op 自定义 Rig 引用的问题。使用 `assign_ik_rig_to_all_ops` 修复本轮新资产，并补入生成脚本。FK Chains / Run IK Rig 的内部引用均已验证；没有重建整个 Op Stack。
+- MMD2UE 新进程重载通过，双侧命名姿态、9 条映射和 Op Rig 引用持久化正确；原重定向器、原 Source/Target Rig 与 mesh 文件哈希保持不变。73 项纯逻辑测试、技能结构校验通过。
+
+在 MMD2UE 内容浏览器打开：`/Game/Characters/TololoSchool1001/Rigs/TPose_v1/RTG_UEFN_To_Tololo_TPose_v1`。`Basis` 是保留原姿态的链条设置对照，不是最终 T-Pose 版本。
+
+报告位于主工程 `Saved/PMX4UE/RetargetTPose/normalize.json`、`reload.json`；生成脚本为 `tools/ue_mmd2ue_normalize_tpose.py`，已有输出拒绝覆盖。本轮未导出新的动画或做动画视觉验收，手掌轴向扭转仍未自动匹配。所有修改保持未提交。
+
+## T-Pose 编辑增量验证（2026-09-26）
+
+- 新增 `retarget-pose` 阶段、双臂几何对齐、逐骨局部轴角/四元数偏移编辑；写入独立重定向器的原生命名 Retarget Pose。
+- 73 项逻辑测试通过；新插件 Editor / Game Development / Game Shipping 编译通过；独立空白项目 API probe 通过。
+- `.local/TPoseProbe_v1` 使用托洛洛原始厘米骨架（包含 ArmTwist / HandTwist 中间骨骼）完成真实 UE Source+Target 双侧自动对齐、Target 手腕 +5° 微调、Source 手腕 -5° 单独编辑。
+- 双臂初始偏差约 35.05°，原生解析后的最大方向误差约 0.00000242°；预测与 UE 的最大位置误差约 0.00000326 cm。
+- 新进程重载自动/手动姿态后，位置与保存前一致；原重定向器保持原状，非编辑骨骼的局部偏移保持原状。
+- mesh 与 Skeleton 文件 SHA-256 与测试输入副本完全一致，没有改绑定姿态或重写 mesh。
+- `pmx4ue.py run --stage retarget-pose --execute` 实际执行成功、退出 0，生成独立资产及阶段记录；已有输出拒绝覆盖。
+- 测试资产：`/Game/PMX4UE/TololoProbe/v1/PoseTest/RTG_TPose`；手动版本为 `RTG_TPose_Manual`、`RTG_TPose_SourceManual`。仅在独立测试工程，不在原 MMD2UE 项目。
+
+边界：本轮 Source/Target 使用同一测试 Rig 验证编辑接口，不代表 Manny→托洛洛等跨角色动画视觉验收。未做完整材质画面、掌心扭转匹配或全身 T-Pose 自动化。已有 bind pose 导入告警也不由此功能修复。
+
+初次测试因 Content 复制多嵌套一层而未找到 Rig，修正独立测试目录层级后重试通过；保留了失败日志，不修改原测试输入资产。使用方式见 [T-Pose 编辑说明](docs/retarget-pose.md)。
+
 ## 本轮独立验证
 
 环境：Windows 11，Blender 3.6.23，UE 5.8.2 (`56702186`)，MSVC 14.44 / Windows SDK 10.0.22621.0。

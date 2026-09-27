@@ -21,6 +21,8 @@
 
 ## IK 与动画
 
+T-Pose 规范化见 `docs/retarget-pose.md`：先确认 Source 与 Target 的实际 mesh/链条，对两侧分别生成命名姿态并验证。MMD2UE 内实验使用真实源动画 Rig 与已经认可的目标 mesh，不以同骨架 smoke test 代替实际对齐；不改绑定姿态。
+
 `tools/draft_profiles.py --config <角色配置>` 在 physics inventory 后可生成 rig/physics 未审核草稿，也可由 agent 自行编写相同结构。rig.json：
 
 ```json

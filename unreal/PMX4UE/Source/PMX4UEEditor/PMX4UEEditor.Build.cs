@@ -8,7 +8,8 @@ public class PMX4UEEditor : ModuleRules
         PrivateDependencyModuleNames.AddRange(new[] {
             "PMX4UE", "AnimGraph", "AnimGraphRuntime", "AnimationCore", "AssetRegistry",
             "BlueprintGraph", "Chaos", "EditorScriptingUtilities", "Json", "JsonUtilities",
-            "MaterialEditor", "PhysicsCore", "RenderCore", "RHI", "Slate", "SlateCore", "UnrealEd"
+            "MaterialEditor", "PhysicsCore", "RenderCore", "RHI", "Slate", "SlateCore", "UnrealEd",
+            "IKRig", "IKRigEditor"
         });
     }
 }

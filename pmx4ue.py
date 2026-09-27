@@ -20,7 +20,7 @@ sys.path.insert(0, str(LEGACY))
 from mmd2ue_core import make_character_config, build_source_audit, build_material_map_draft
 
 STAGES = ("audit", "export", "skeleton-audit", "skeleton-plan", "skeleton-apply",
-          "material-draft", "material-check", "ue-build", "ue-validate", "ik",
+          "material-draft", "material-check", "ue-build", "ue-validate", "ik", "retarget-pose",
           "physics-inventory", "physics-inspect", "physics-plan", "physics-build",
           "physics-test", "performance")
 
@@ -84,6 +84,7 @@ def initialize(args):
                        source_scale_reviewed=False, skeleton_policy="preserve",
                        skeleton_reviewed=False, material_reviewed=False,
                        rig_profile=str(dest.parent / "rig.json"),
+                       retarget_pose_profile=str(dest.parent / "retarget_pose.json"),
                        physics_profile=str(dest.parent / "physics.json"))
     write(dest, c)
     return {"config": str(dest), "next": "doctor, then audit; review source scale before export"}
@@ -199,6 +200,11 @@ def recipe(c, project, a, stage):
         inputs = [Path(p["rig_profile"])]
         env.update(PMX4UE_RIG_PROFILE=str(inputs[0]), PMX4UE_OUTPUT=str(out))
         argv = ue(ROOT / "tools/ue_rig.py")
+    elif stage == "retarget-pose":
+        require(p.get("retarget_pose_profile"), "Set pmx4ue.retarget_pose_profile to a reviewed pose profile")
+        inputs = [Path(p["retarget_pose_profile"])]
+        env.update(PMX4UE_POSE_PROFILE=str(inputs[0]), PMX4UE_OUTPUT=str(out))
+        argv = ue(ROOT / "tools/ue_retarget_pose.py")
     elif stage == "physics-inventory":
         inputs = [Path(c["source"]["pmx"])]
         argv = blender(LEGACY / "blender_pmx_physics_inventory.py", "--config", config, "--output", out)
