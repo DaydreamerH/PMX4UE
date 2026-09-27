@@ -220,6 +220,22 @@ def plan(snapshot, spec):
         bones[names[name]]["offset"] = (0, 0, 0, 1)
         changed.add(name)
     forward(bones)
+    # Reviewed torso/base corrections precede limb solving. Existing `edits`
+    # remain post-solve wrist/sole adjustments for backwards compatibility.
+    def apply_edits(edits):
+        for edit in edits:
+            if edit["bone"] not in names:
+                raise ValueError("Unknown edit bone: " + edit["bone"])
+            row = bones[names[edit["bone"]]]
+            if edit.get("mode") == "set_offset":
+                row["offset"] = unit(vector(edit["quaternion_xyzw"], 4))
+            elif edit.get("mode") == "add_local":
+                row["offset"] = mul(row["offset"], axis_angle(edit["axis"], edit["degrees"]))
+            else:
+                raise ValueError("Edit mode must be set_offset or add_local")
+            changed.add(edit["bone"])
+            forward(bones)
+    apply_edits(spec.get("pre_edits", []))
     if spec.get("auto_arms", False):
         arms = spec["arms"]
         if set(arms) != {"left", "right"} or any(len(v) != 3 for v in arms.values()):
@@ -264,18 +280,7 @@ def plan(snapshot, spec):
         leg_changes, leg_segments, stance = align_leg_directions(bones, spec["leg_alignment"])
         changed.update(leg_changes)
         segments.extend(leg_segments)
-    for edit in spec.get("edits", []):
-        if edit["bone"] not in names:
-            raise ValueError("Unknown edit bone: " + edit["bone"])
-        row = bones[names[edit["bone"]]]
-        if edit.get("mode") == "set_offset":
-            row["offset"] = unit(vector(edit["quaternion_xyzw"], 4))
-        elif edit.get("mode") == "add_local":
-            row["offset"] = mul(row["offset"], axis_angle(edit["axis"], edit["degrees"]))
-        else:
-            raise ValueError("Edit mode must be set_offset or add_local")
-        changed.add(edit["bone"])
-        forward(bones)
+    apply_edits(spec.get("edits", []))
     if not changed:
         raise ValueError("No auto alignment or bone edits requested")
     for item in segments:

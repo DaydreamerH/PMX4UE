@@ -37,6 +37,18 @@ def build(profile, namespace, output):
     asset = unreal.load_asset(source_path)
     if not isinstance(asset, unreal.IKRetargeter):
         raise ValueError("Input must be an IK Retargeter")
+    agent_plan = None
+    if "agent_contract" in profile:
+        from ue_pose_inventory import collect
+        from retarget_workflow import compile_pair, fingerprint
+        contract = profile["agent_contract"]
+        if contract.get("schema") != "pmx4ue.pose-contract.v1":
+            raise ValueError("Unknown agent pose contract")
+        agent_plan = compile_pair(collect(asset), contract["models"], contract["pair"])
+        if fingerprint(agent_plan["profile"]) != fingerprint(profile):
+            raise ValueError("Executable profile differs from reviewed plan; regenerate offline")
+        if namespace.rstrip("/") != contract["pair"]["namespace"].rstrip("/"):
+            raise ValueError("Work order namespace differs from reviewed pair")
     sides = profile["sides"]
     if not sides or set(sides) - {"source", "target"}:
         raise ValueError("Sides must contain source, target or both")
@@ -51,7 +63,10 @@ def build(profile, namespace, output):
             raise ValueError("Pose name exists; use a new name")
         plans[side] = plan(before[side], spec)
     report = dict(status="planned", profile=profile, before=before, plans=plans,
-                  modified_mesh=False, modified_skeleton=False, visual_review="pending")
+                  modified_mesh=False, modified_skeleton=False, visual_review="pending", process_id=os.getpid())
+    if agent_plan:
+        report["acceptance"] = agent_plan["acceptance"]
+        report["warnings"] = agent_plan["warnings"]
     result = None
     try:
         result = unreal.EditorAssetLibrary.duplicate_asset(source_path, destination)
@@ -87,6 +102,8 @@ def build(profile, namespace, output):
             raise RuntimeError("Saving independent retargeter failed")
         report.update(status="saved_native_readback_passed_needs_visual_review", after=after,
                       original_retargeter_unchanged=True)
+        if agent_plan:
+            report["acceptance"]["native_readback"] = "passed"
     except Exception as error:
         report.update(status="failed_do_not_use", error=str(error),
                       partial_asset=destination if result else None)

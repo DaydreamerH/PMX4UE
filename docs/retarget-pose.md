@@ -1,5 +1,7 @@
 # 重定向器 T-Pose 编辑
 
+新模型优先使用 [Agent 主导的通用流程](agent-retarget-workflow.md)，生成可复用模型档案与配对方案；本文保留底层手写配置和历史案例。`pre_edits` 现在支持在自动四肢求解之前修正腰、骨盆或锁骨，`edits` 保持求解后微调语义。
+
 本工具编辑 **UE 原生 IK Retargeter 的 Retarget Pose**。不改 mesh、骨架层级、绑定姿态、权重、原动画，也不做物理模拟。结果仍可在 UE 的姿态编辑模式里继续手调。
 
 本地默认运行在 MMD2UE 原工程，新版本资产也保存在 MMD2UE 内容目录。该工程使用现有 `MMD2UEEditor` 中的 `MMD2UERetargetTools`，不安装带重名物理节点的整套 PMX4UE 插件。只有明确的迁移测试才使用其它工程。

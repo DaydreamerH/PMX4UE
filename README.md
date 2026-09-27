@@ -69,6 +69,8 @@ python pmx4ue.py install-plugin --config "characters/MyCharacter/character.json"
 
 ## 能完成什么、什么还需要 agent
 
+新增 [Agent 主导的通用 T-Pose 流程](docs/agent-retarget-workflow.md)：模型语义档案与配对方案分离，离线生成草稿/预演，执行前校验数据身份，双侧坐标转换和姿态求解；agent 负责模型差异与效果迭代。无上下文接手用 `templates/retarget-agent.md`。本轮通用化仅完成离线验证，UE 新入口和多模型视觉验收待做。
+
 新增 [重定向器 T-Pose 编辑](docs/retarget-pose.md)：`retarget-pose` 阶段支持独立命名姿态、双臂自动对齐、逐骨角度微调与 UE 原生数据验证，不修改 mesh 绑定姿态。配置模板见 `templates/retarget_pose.example.json`。
 
 - 脚本：PMX/贴图盘点、厘米导出、骨骼审计及有证据的上半身优化、材质构建、IK 配置、PMX 刚体/关节/碰撞组转换、独立物理资产与测试 ABP、数值及 PIE 性能测试。
