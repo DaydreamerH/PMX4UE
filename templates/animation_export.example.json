@@ -1,0 +1,9 @@
+{
+  "schema": "pmx4ue.animation-export.v1",
+  "reviewed": false,
+  "source_mesh": "/Game/Source/Mesh/SK_Source",
+  "target_mesh": "/Game/PMX4UE/MyCharacter/v1/Mesh/SK_MyCharacter",
+  "retargeter": "/Game/PMX4UE/MyCharacter/v1/Rigs/RTG_PoseReviewed",
+  "animations": ["/Game/Source/Animations/Walk"],
+  "output_directory": "/Game/PMX4UE/MyCharacter/v1/Animations"
+}

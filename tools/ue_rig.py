@@ -3,10 +3,11 @@ import json
 import os
 from pathlib import Path
 import unreal
+from ue_bridge import resolve
 
 
 def bone_names(mesh):
-    report = json.loads(unreal.PMX4UEPmxSkirtTools.inspect_physics_mesh(mesh.get_path_name()))
+    report = json.loads(resolve("physics").inspect_physics_mesh(mesh.get_path_name()))
     if report.get("status") != "inspected":
         raise RuntimeError(report)
     return {row["name"] for row in report["bones"]}

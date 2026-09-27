@@ -19,8 +19,8 @@ LEGACY = ROOT / "tools/legacy"
 sys.path.insert(0, str(LEGACY))
 from mmd2ue_core import make_character_config, build_source_audit, build_material_map_draft
 
-STAGES = ("audit", "export", "skeleton-audit", "skeleton-plan", "skeleton-apply",
-          "material-draft", "material-check", "ue-build", "ue-validate", "ik", "retarget-pose",
+STAGES = ("audit", "capabilities", "export", "skeleton-audit", "skeleton-plan", "skeleton-apply",
+          "material-draft", "material-check", "ue-build", "ue-validate", "material-compile", "ik", "retarget-pose", "animation-export",
           "physics-inventory", "physics-inspect", "physics-plan", "physics-build",
           "physics-test", "performance")
 STAGES += ("face-sdf",)
@@ -86,6 +86,7 @@ def initialize(args):
                        skeleton_reviewed=False, material_reviewed=False,
                        rig_profile=str(dest.parent / "rig.json"),
                        retarget_pose_profile=str(dest.parent / "retarget_pose.json"),
+                       animation_export_profile=str(dest.parent / "animation_export.json"),
                        physics_profile=str(dest.parent / "physics.json"))
     write(dest, c)
     return {"config": str(dest), "next": "doctor, then audit; review source scale before export"}
@@ -97,7 +98,8 @@ def doctor(c, project):
     checks = {"project": project.is_file(), "pmx": Path(c["source"]["pmx"]).is_file(),
               "blender": Path(p["blender"]).is_file(),
               "ue_editor": (engine / "Engine/Binaries/Win64/UnrealEditor-Cmd.exe").is_file(),
-              "plugin_source": (project.parent / "Plugins/PMX4UE/PMX4UE.uplugin").is_file()}
+              "native_source": ((project.parent / "Plugins/PMX4UE/PMX4UE.uplugin").is_file()
+                                or (project.parent / "Source/MMD2UEEditor/MMD2UEEditor.Build.cs").is_file())}
     return {"paths_ok": all(checks.values()), "checks": checks,
             "unverified": ["Blender mmd_tools addon", "C++ toolchain and compiled plugin load", "UE APIs for this engine version"],
             "note": "Path checks are not a successful import or runtime validation."}
@@ -119,6 +121,8 @@ def project_lock(project):
 
 
 def install_plugin(project, apply=False, source=None):
+    require(not (project.parent / "Source/MMD2UEEditor/MMD2UEEditor.Build.cs").is_file(),
+            "MMD2UE already provides native nodes; do not install a duplicate plugin")
     src = Path(source).resolve() if source else ROOT / "unreal/PMX4UE"
     dest = project.parent / "Plugins/PMX4UE"
     require((src / "PMX4UE.uplugin").is_file(), "Plugin source/packaged directory missing")
@@ -155,7 +159,8 @@ def recipe(c, project, a, stage):
         env.update(PMX4UE_SCRIPT=str(script), PMX4UE_CONFIG=str(config), PMX4UE_STAGE=stage,
                    MMD2UE_CHARACTER_CONFIG=str(config), MMD2UE_BUILD_MODE="build", MMD2UE_ASSET_VARIANT="")
         flag = "-ExecutePythonScript=" if pie else "-script="
-        return [str(exe), str(project), *(["/Engine/Maps/Templates/Template_Default"] if pie else ["-run=pythonscript"]),
+        return [str(exe), str(project), *(["/Engine/Maps/Templates/Template_Default", "-RenderOffscreen",
+                "-ini:EditorSettings:[/Script/UnrealEd.EditorPerformanceSettings]:bThrottleCPUWhenNotForeground=False"] if pie else ["-run=pythonscript"]),
                 flag + str(ROOT / "tools/ue_entry.py"), "-unattended", "-nop4", "-nosplash"]
 
     if stage == "face-sdf":
@@ -166,10 +171,22 @@ def recipe(c, project, a, stage):
     elif stage == "audit":
         internal = "audit"
         inputs = [Path(c["source"]["pmx"])]
+    elif stage == "capabilities":
+        env.update(PMX4UE_OUTPUT=str(out))
+        argv = ue(ROOT / "tools/ue_capabilities.py")
+    elif stage == "animation-export":
+        require(p.get("animation_export_profile"), "Set animation_export_profile first")
+        inputs = [Path(p["animation_export_profile"])]
+        env.update(PMX4UE_ANIMATION_PROFILE=str(inputs[0]), PMX4UE_OUTPUT=str(out))
+        argv = ue(ROOT / "tools/ue_animation_export.py")
+    elif stage == "material-compile":
+        inputs = [a / "ue_validation.json"]
+        env.update(PMX4UE_OUTPUT=str(out))
+        argv = ue(ROOT / "tools/ue_material_compile.py") + ["-AllowCommandletRendering"]
     elif stage == "export":
         require(p.get("source_scale_reviewed") is True, "Review source scale (meters per PMX unit) first")
         inputs = [Path(c["source"]["pmx"])]
-        outputs = [base_blend, base_fbx, a / "blender_manifest.json"]
+        outputs = [base_blend, base_fbx, a / "blender_manifest.json", base_fbx.with_name(base_fbx.stem+'.raw.fbx')]
         argv = blender(ROOT / "tools/blender_prepare.py", "--pmx", inputs[0], "--source-root", c["source"]["root"],
                        "--out-dir", a, "--character-id", c["character"]["id"], "--scale", c["source"]["scale"], "--fbx-units", "cm-native")
     elif stage == "skeleton-audit":
@@ -224,8 +241,9 @@ def recipe(c, project, a, stage):
                    PMX_PHYSICS_PROFILE=str(profile), PMX_PHYSICS_PLAN=str(a / "physics_plan.json"))
         if stage == "performance":
             inputs += [a / "physics_test.json"]
+            outputs += [a / "performance_review.json"]
             env.update(PMX_PHYSICS_TEST_REPORT=str(inputs[1]), PMX_PIE_CLOSE="1")
-        argv = ue(LEGACY / ("ue_pmx_pie_performance.py" if stage == "performance" else "ue_pmx_physics_workflow.py"), pie=stage == "performance")
+        argv = ue(ROOT / "tools/ue_physics_performance.py" if stage == "performance" else LEGACY / "ue_pmx_physics_workflow.py", pie=stage == "performance")
     return dict(stage=stage, argv=argv, env=env, internal=internal,
                 inputs=list(map(str, inputs)), outputs=list(map(str, outputs)))
 
@@ -258,12 +276,26 @@ def run(c, project, a, stage, execute=False, timeout=1800):
                     result = subprocess.run(spec["argv"], env={**os.environ, **spec["env"]},
                                             cwd=ROOT, stdout=stream, stderr=subprocess.STDOUT, timeout=timeout,
                                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                record["process_exit_code"] = result.returncode
                 require(result.returncode == 0, f"Process exited {result.returncode}; see {log}")
                 text = log.read_text(encoding="utf-8", errors="replace")
                 record["import_risks"] = sorted({token for token in ("invalid bind poses", "zero length normal")
-                                                  if token in text})
-            require(all(Path(f).is_file() for f in spec["outputs"]), "Process ended without expected output")
+                                                  if token in text.lower()})
+            require(Path(spec["outputs"][0]).is_file() if stage == "performance" else all(Path(f).is_file() for f in spec["outputs"]), "Process ended without expected output")
+            if stage == "performance":
+                from tools.review_physics_benchmark import review
+                raw = read(spec["outputs"][0])
+                policy = read(a / "physics_plan.json")["performance_test"]
+                verdict = review(raw, "Candidate", "NoPhysics", record["process_exit_code"],
+                                 repeats=policy["repeats"], target_size=(policy.get("viewport_width", 1920), policy.get("viewport_height", 1080)),
+                                 minimum_average_fps=policy["minimum_average_fps"], maximum_p99_ms=policy["maximum_p99_ms"])
+                write(a / "performance_review.json", verdict)
+                record["performance_review"] = verdict
+                require(verdict["status"] != "invalid_measurement", "Invalid performance measurement; inspect performance_review.json")
             record.update(status="executed_needs_review", output_sha256={f: sha(f) for f in spec["outputs"]})
+            if record.get("import_risks"):
+                record.update(status="executed_with_import_risks", production_accepted=False,
+                              next_action="Inspect importer log and binding evidence; successful import is not skeleton acceptance")
         except Exception as error:
             record.update(status="failed", error=str(error))
             raise

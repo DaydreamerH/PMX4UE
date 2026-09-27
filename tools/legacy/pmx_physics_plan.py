@@ -25,8 +25,12 @@ def make_plan(inventory, profile, mesh):
     settings = resolve_settings(profile)
     require(profile["source_sha256"] == inventory["source_sha256"], "PMX fingerprint changed; review selectors again")
     require(mesh.get("status") == "inspected" and mesh["mesh"].split(".")[0] == profile["mesh"].split(".")[0], "Wrong UE mesh inspection")
-    require(isinstance(profile.get("test_animation"), str) and profile["test_animation"].startswith("/Game/"),
-            "A real target-skeleton test animation is required; PMX alone does not contain motion")
+    rest_only = profile.get("rest_only", False)
+    require(type(rest_only) is bool, "rest_only must be boolean")
+    require(rest_only or (isinstance(profile.get("test_animation"), str) and profile["test_animation"].startswith("/Game/")),
+            "A real target-skeleton test animation is required, or explicitly choose rest_only")
+    require(not rest_only or (not profile.get("test_animation") and not settings["performance_test"]["enabled"]),
+            "rest_only requires empty animation and disabled performance; cannot pass movement acceptance")
     require(profile.get("cross_partition_collision") == "none", "Only explicitly independent partitions are supported; use special-requirements prompt")
     require(profile.get("cross_partition_reason"), "Document why cross-partition collisions are disabled")
     variant = profile["variant"]
@@ -82,6 +86,10 @@ def make_plan(inventory, profile, mesh):
     dynamic = {i for i, b in bodies.items() if b["mode"] != 0}
     require(set(owners) | set(ignored) == dynamic, f"Unreviewed dynamic rigids: {sorted(dynamic-set(owners)-set(ignored))}")
     dynamic_targets = {i: target(bodies[i]["source_bone"]) for i in owners}
+    sim = settings["simulation"]
+    if sim["space"] == "base_bone":
+        require(sim["base_bone"] in mesh_bones and sim["base_bone"] not in dynamic_targets.values(),
+                "Simulation base bone must exist and not be dynamically driven")
     require(len(set(dynamic_targets.values())) == len(dynamic_targets), "Multiple dynamic rigids drive the same UE bone")
     bone_owner = {bone: owners[i] for i, bone in dynamic_targets.items()}
     for bone, owner in bone_owner.items():
@@ -161,11 +169,11 @@ def make_plan(inventory, profile, mesh):
         mesh_inspection_sha256=hashlib.sha256(json.dumps(mesh, sort_keys=True, ensure_ascii=False).encode()).hexdigest(),
         independent_partitions=True, disabled_cross_dynamic_pairs_by_policy=disabled_cross_pairs,
         cross_partition_reason=profile["cross_partition_reason"], ignored_dynamic=ignored,
-        animation=profile["test_animation"], rest_blueprint=f"{asset_root}/ABP_Rest_{variant}",
+        rest_only=rest_only, animation=profile.get("test_animation", ""), rest_blueprint=f"{asset_root}/ABP_Rest_{variant}",
         simulation=settings["simulation"], performance_test=settings["performance_test"],
         performance_controls=dict(synchronous=f"{asset_root}/ABP_SyncControl_{variant}",
                                   no_physics=f"{asset_root}/ABP_NoPhysicsControl_{variant}") if settings["performance_test"]["enabled"] else {},
-        walk_blueprint=f"{asset_root}/ABP_Walk_{variant}", partitions=manifests,
+        walk_blueprint="" if rest_only else f"{asset_root}/ABP_Walk_{variant}", partitions=manifests,
         notes=["Native Chaos approximates Bullet limits/springs; not an exact PMX solver",
                "No cross-partition proxies, thickness additions or garment avoidance"])
 

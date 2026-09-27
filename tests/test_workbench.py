@@ -25,6 +25,25 @@ class WorkbenchTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "scale"):
             w.run(self.c, self.project, self.a, "export")
 
+    def test_added_stages_are_dry_and_explicit(self):
+        for stage, script in [('capabilities','ue_capabilities.py'), ('animation-export','ue_animation_export.py'),
+                              ('material-compile','ue_material_compile.py')]:
+            spec = w.run(self.c, self.project, self.a, stage)
+            self.assertTrue(spec['env']['PMX4UE_SCRIPT'].endswith(script))
+        self.assertFalse(self.a.exists())
+
+    def test_bind_warning_never_becomes_clean_execution(self):
+        def fake_run(*args, **kwargs):
+            kwargs['stdout'].write('Imported skeleton has some INVALID BIND POSES\n')
+            w.write(self.a/'capabilities.json', {'status':'available'})
+            return argparse.Namespace(returncode=0)
+        with patch.object(w.subprocess, 'run', side_effect=fake_run):
+            result = w.run(self.c, self.project, self.a, 'capabilities', True)
+        self.assertEqual(result['status'], 'executed_with_import_risks')
+        record = w.read(result['record'])
+        self.assertFalse(record['production_accepted'])
+        self.assertIn('invalid bind poses', record['import_risks'])
+
     def test_retarget_pose_stage_is_explicit_and_dry(self):
         spec = w.run(self.c, self.project, self.a, "retarget-pose")
         self.assertTrue(spec["env"]["PMX4UE_SCRIPT"].endswith("ue_retarget_pose.py"))

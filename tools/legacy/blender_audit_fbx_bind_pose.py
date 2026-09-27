@@ -62,11 +62,16 @@ def audit(path):
         if cluster["reference"] is None:
             continue
         for name, matrix in mesh_nodes:
-            delta = max(abs(matrix[i][j] - cluster["reference"][i][j])
+            # Serialized FBX row-vector matrices: Transform is relative to the
+            # link, not the global mesh matrix returned by SDK GetTransformMatrix.
+            # This diagnostic is float32 and cannot certify SDK bind validity.
+            global_reference = cluster["reference"] @ cluster["link"]
+            delta = max(abs(matrix[i][j] - global_reference[i][j])
                         for i in range(4) for j in range(4))
             mesh_findings.append((delta, name, cluster["name"]))
     return {
         "path": str(path), "model_count": len(models), "cluster_count": len(clusters),
+        "scope": "Blender serialized matrix consistency only; SDK/UE bind validation still required. Mesh comparisons assume a single mesh.",
         "poses": [{"name": p["name"], "node_count": p["node_count"]} for p in poses],
         "bind_missing_models": sorted(m.props[1].split(b"\0")[0].decode("utf-8", "replace")
                                       for ident, m in models.items()

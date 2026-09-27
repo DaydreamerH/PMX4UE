@@ -11,8 +11,10 @@ import time
 from pathlib import Path
 
 import unreal
+from ue_bridge import resolve
+from pmx_physics_settings import resolve_settings
 
-api = unreal.PMX4UEPmxSkirtTools
+api = resolve("physics")
 
 
 def digest(value):
@@ -21,7 +23,7 @@ def digest(value):
 
 def checked(encoded):
     result = json.loads(encoded)
-    if result.get("status") == "error":
+    if "error" in result or result.get("status") in ("error", "failed", "blocked"):
         raise RuntimeError(result)
     return result
 
@@ -51,16 +53,19 @@ def main():
         report.update(plan=str(plan_path), plan_sha256=fingerprint, assets={}, tests={})
         parts = plan["partitions"]
         paths = [p["asset"] for p in parts]
-        all_paths = paths + [plan["rest_blueprint"], plan["walk_blueprint"]]
+        rest_only = plan.get("rest_only", False)
+        all_paths = paths + [p for p in (plan["rest_blueprint"], plan["walk_blueprint"]) if p]
         controls = plan.get("performance_controls", {})
         all_paths += list(controls.values())
         deferred = plan.get("simulation", {}).get("timing", "synchronous") == "deferred"
-        report["simulation"] = plan.get("simulation", {"timing": "synchronous"})
+        simulation = resolve_settings({"simulation": plan.get("simulation", {})})["simulation"]
+        report["simulation"] = simulation
+        workflow = resolve("workflow")
         if len(all_paths) != len(set(all_paths)):
             raise RuntimeError("Duplicate destination asset")
-        animation = unreal.load_asset(plan["animation"])
+        animation = unreal.load_asset(plan["animation"]) if plan["animation"] else None
         mesh = unreal.load_asset(plan["mesh"])
-        if not animation or not mesh or animation.get_editor_property("skeleton") != mesh.get_editor_property("skeleton"):
+        if not mesh or (not rest_only and (not animation or animation.get_editor_property("skeleton") != mesh.get_editor_property("skeleton"))):
             raise RuntimeError("Animation/mesh skeleton mismatch or missing asset")
         inspection = checked(api.inspect_physics_mesh(plan["mesh"]))
         if digest(inspection) != plan["mesh_inspection_sha256"]:
@@ -78,11 +83,16 @@ def main():
                 report["assets"][part["asset"]] = checked(api.build_experiment(str(path)))
                 persist()
             for path, clip in ((plan["rest_blueprint"], ""), (plan["walk_blueprint"], plan["animation"])):
+                if not path:
+                    continue
                 report["assets"][path] = checked(api.build_physics_blueprint(plan["mesh"], paths, clip, path, deferred))
+                report["assets"][path]["simulation"] = checked(workflow.configure_physics_blueprint(path, json.dumps(simulation)))
                 persist()
             for kind, path in controls.items():
                 report["assets"][path] = checked(api.build_physics_blueprint(
                     plan["mesh"], [] if kind == "no_physics" else paths, plan["animation"], path, False))
+                sync = dict(simulation, timing="synchronous", accept_one_frame_latency=False)
+                report["assets"][path]["simulation"] = checked(workflow.configure_physics_blueprint(path, json.dumps(sync)))
             for path in all_paths:
                 asset = unreal.load_asset(path)
                 unreal.EditorAssetLibrary.set_metadata_tag(asset, "MMD2UE.PhysicsPlanSHA256", fingerprint)
@@ -97,10 +107,12 @@ def main():
             expected_names = {b["target_bone"] for p in parts for b in p["bodies"] if not b["kinematic"]}
             expected_filters = sum(len(p["bodies"]) for p in parts)
             expected_actors = sum(len({b["target_bone"] for b in p["bodies"]}) for p in parts)
-            for tag, bp, fps, move in (("rest_60", plan["rest_blueprint"], 60., False),
-                                       ("walk_60", plan["walk_blueprint"], 60., False),
+            cases = [("rest_60", plan["rest_blueprint"], 60., False)]
+            if not rest_only:
+                cases += [("walk_60", plan["walk_blueprint"], 60., False),
                                        ("walk_move_turn_60", plan["walk_blueprint"], 60., True),
-                                       ("walk_move_turn_30", plan["walk_blueprint"], 30., True)):
+                                       ("walk_move_turn_30", plan["walk_blueprint"], 30., True)]
+            for tag, bp, fps, move in cases:
                 started = time.perf_counter()
                 result = checked(api.test_experiment(plan["mesh"], bp, 12., fps, move, False, plan["measurement_anchor"]))
                 result["wall_seconds_including_setup"] = time.perf_counter() - started
@@ -124,7 +136,27 @@ def main():
                             or abs(setting["fixed_time_step"]-solver["fixed_time_step"]) > 1e-7
                             or setting["use_linear_joint_solver"] != solver["use_linear_joint_solver"]):
                         raise RuntimeError("Runtime solver settings differ from plan")
-            report["status"] = "numerically_measured_visual_and_performance_pending"
+            if not rest_only:
+                for fps, hitch, move in ((60, False, False), (30, False, False), (15, False, False),
+                                         (60, True, False), (15, False, True), (60, True, True)):
+                    tag = f"motion_{fps}_hitch{int(hitch)}_move{int(move)}"
+                    result = checked(workflow.test_motion(plan["mesh"], plan["walk_blueprint"], 20., float(fps),
+                        hitch, move, plan["measurement_anchor"], sorted(expected_names)))
+                    report["tests"][tag] = result
+                    persist()
+                    if (not result["finite"] or result["seconds_completed"] < 19.999
+                            or result["filters_applied"] != expected_filters or result["filter_errors"]
+                            or result["simulated_bones"] != len(expected_names)):
+                        raise RuntimeError("Moving skeleton test failed: " + tag)
+                    for node in result["nodes"]:
+                        if node["space"] != {"component": 0, "world": 1, "base_bone": 2}[simulation["space"]]:
+                            raise RuntimeError("Runtime simulation space differs from plan")
+                        if simulation["space"] == "base_bone" and node["base_bone"] != simulation["base_bone"]:
+                            raise RuntimeError("Runtime base bone differs from plan")
+                        for key in ("world_alpha", "damping_alpha", "max_linear_velocity", "max_linear_acceleration", "max_angular_velocity", "max_angular_acceleration"):
+                            if abs(node[key]-simulation[key]) > max(1e-5, abs(simulation[key])*1e-6):
+                                raise RuntimeError("Runtime motion setting differs: " + key)
+            report["status"] = "rest_measured_movement_pending" if rest_only else "numerically_measured_visual_and_performance_pending"
             report["pending"] = ["Startup transient", "Garment/body penetration in actual animation",
                                  "Normal-material shading", "Real-time performance and game integration"]
         else:

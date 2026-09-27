@@ -4,7 +4,7 @@
 
 脚本负责可靠地读取、转换、构建和测量；agent 负责理解模型、参考资料、选择方案、看效果，以及在必要时修改脚本。它不是把所有模型塞进同一套参数的一键导入器。
 
-本地开发约定（2026-09-27）：后续实验默认直接在上级 **MMD2UE 工程**中完成，用新资产版本隔离，不另建 UE 工程。以下空白工程/插件安装说明保留供用户明确要求的外部迁移；不得把整套插件重复安装进 MMD2UE。仅在用户明确要求时提交修改。
+当前源码发行版：**0.2.0**。首次迁移从 [START_HERE.md](START_HERE.md) 开始；可直接使用 [独立 agent 任务模板](templates/import-agent.md)。完整提交包含通用工具及案例记录，不含引擎、模型、动画或预编译插件。以用户指定的目标工程为准；已有同名原生节点时不要重复安装插件。
 
 ## 给没有上下文的 agent
 
@@ -60,22 +60,28 @@ python tests/run_tests.py
 先独立打包，再复制到目标空白工程；源码也可以通过工程自身构建。
 
 ```powershell
-& "D:/Epic/UE_5.8/Engine/Build/BatchFiles/RunUAT.bat" BuildPlugin "-Plugin=$PWD/unreal/PMX4UE/PMX4UE.uplugin" "-Package=$PWD/.local/PackagedPlugin" -TargetPlatforms=Win64 -NoP4
-python pmx4ue.py install-plugin --config "characters/MyCharacter/character.json" --source ".local/PackagedPlugin"
-python pmx4ue.py install-plugin --config "characters/MyCharacter/character.json" --source ".local/PackagedPlugin" --apply
+& "D:/Epic/UE_5.8/Engine/Build/BatchFiles/RunUAT.bat" BuildPlugin "-Plugin=$PWD/unreal/PMX4UE/PMX4UE.uplugin" "-Package=$PWD/.local/PackagedPlugin_0_2_0" -TargetPlatforms=Win64 -NoP4
+python pmx4ue.py install-plugin --config "characters/MyCharacter/character.json" --source ".local/PackagedPlugin_0_2_0"
+python pmx4ue.py install-plugin --config "characters/MyCharacter/character.json" --source ".local/PackagedPlugin_0_2_0" --apply
 ```
 
-复制前关闭目标编辑器；安装只新增 `Plugins/PMX4UE`，不修改 `.uproject`，已有目标目录则拒绝覆盖。插件描述符启用了所需依赖。二进制必须匹配目标引擎版本；不要跨版本搬运本机编译产物。**原 MMD2UE 实验工程已包含同名动画节点，不要再往原工程安装本插件。** 本仓库本轮测试使用独立空白工程。
+复制前关闭目标编辑器；安装只新增 `Plugins/PMX4UE`，不修改 `.uproject`，已有目标目录则拒绝覆盖。插件描述符启用了所需依赖。二进制必须匹配目标引擎版本；不要跨版本搬运编译产物。已提供同名原生节点的宿主只适配现有模块，不重复安装插件。旧打包目录不代表当前源码；0.2.0 含新增 SDF 组件，必须从这一版源码重新构建。目标工程自行构建源码插件也可，不要求复制历史 HostProject。
 
 ## 能完成什么、什么还需要 agent
 
-新增 [Agent 主导的通用 T-Pose 流程](docs/agent-retarget-workflow.md)：模型语义档案与配对方案分离，离线生成草稿/预演，执行前校验数据身份，双侧坐标转换和姿态求解；agent 负责模型差异与效果迭代。无上下文接手用 `templates/retarget-agent.md`。本轮通用化仅完成离线验证，UE 新入口和多模型视觉验收待做。
+新项目先读 [从 PMX 开始的执行手册](docs/fresh-project-runbook.md)。新增能力探测、PMX 原始骨名映射、有界 FBX 绑定精度修正、独立动画导出、无动画静止物理、Base Bone Space/运动限幅、通用移动与性能采集。按 PMX→UE 技能的分层验收要求，材质/绑定/重定向/物理/性能分别验收，遇到不支持项保留证据，不把执行结束当作全部通过。
+
+新增 [Agent 物理迭代与验收流程](docs/agent-physics-workflow.md)：安全换动画、PMX 碰撞边界、根运动/低帧率检查、三轮性能对照与证据分级。`tools/review_physics_benchmark.py` 可离线复核已有 PIE 报告，防止用小视口或无效数据冒充游戏性能；无上下文接手使用 `templates/physics-agent.md`。当前效果已获用户认可，完整游戏验收仍须按模型/目标场景完成。
+
+新增 [Agent 主导的通用 T-Pose 流程](docs/agent-retarget-workflow.md)：模型语义档案与配对方案分离，离线生成草稿/预演，执行前校验数据身份，双侧坐标转换和姿态求解；agent 负责模型差异与效果迭代。无上下文接手用 `templates/retarget-agent.md`。通用合同已在 UEFN→托洛洛真实配对完成原生生成和新进程重载；多模型视觉验收仍需逐例完成。
 
 新增 [重定向器 T-Pose 编辑](docs/retarget-pose.md)：`retarget-pose` 阶段支持独立命名姿态、双臂自动对齐、逐骨角度微调与 UE 原生数据验证，不修改 mesh 绑定姿态。配置模板见 `templates/retarget_pose.example.json`。
 
+新增 [头骨驱动 Face SDF](docs/face-sdf-runtime.md)：`face-sdf` 阶段按模型审核骨名、槽和参考方向，生成独立材质与测试角色。插件包含运行时组件；在角色实例中验证动画跟随，不以材质编译或普通 ABP 预览代替动态验收。
+
 - 脚本：PMX/贴图盘点、厘米导出、骨骼审计及有证据的上半身优化、材质构建、IK 配置、PMX 刚体/关节/碰撞组转换、独立物理资产与测试 ABP、数值及 PIE 性能测试。
 - agent：材质槽与纹理语义、风格、骨骼角色和链条、重定向姿势、PMX 分区依据、特殊关节适配、视觉验收。可以修改脚本并补回归用例，而不是无限试参数。
-- PMX 不含走路动画。没有提供动画时先完成可验证部分，明确“动态验收未完成”；不能拿静止结果冒充移动测试通过。当前物理构建包装器要求一条同骨架动画，agent 可增加有测试的 rest-only 分支，但不得伪造动态验收。
+- PMX 不含走路动画。没有提供动画时使用 `rest_only=true`、空 `test_animation`、关闭性能测试，构建/测量静止物理；标记动态验收未完成。有动作后用 `animation-export` 创建同骨架新动画，再建新的动态物理版本。
 - 支持边界与版本实测见 [VERIFICATION.md](VERIFICATION.md)。现有成功案例不是其它角色必然 60 FPS 的承诺。
 
 ## 管理与拓展

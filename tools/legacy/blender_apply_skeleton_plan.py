@@ -21,6 +21,8 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 from blender_skeleton_audit import collect_bone_references
 from blender_fbx_units import prepare_cm_native_scene, audit_fbx_units, assert_cm_native_contract
+sys.path.insert(0,str(SCRIPT_DIR.parent))
+from blender_fbx_bind import normalize as normalize_fbx_bind
 
 
 def _args():
@@ -249,8 +251,9 @@ def main():
             mesh.select_set(True)
         armature.select_set(True)
         bpy.context.view_layer.objects.active = armature
+        raw_fbx = stage / 'raw_bind.fbx' if args.cm_native else staged_fbx
         bpy.ops.export_scene.fbx(
-            filepath=str(staged_fbx), use_selection=True, object_types={"ARMATURE", "MESH"},
+            filepath=str(raw_fbx), use_selection=True, object_types={"ARMATURE", "MESH"},
             use_mesh_modifiers=False, use_armature_deform_only=False, add_leaf_bones=False,
             bake_anim=False, apply_unit_scale=True, global_scale=1.0,
             apply_scale_options="FBX_SCALE_UNITS" if args.cm_native else "FBX_SCALE_NONE",
@@ -258,6 +261,7 @@ def main():
             use_tspace=True, use_custom_props=True, path_mode="COPY", embed_textures=False,
         )
         if args.cm_native:
+            report['bind_precision'] = normalize_fbx_bind(raw_fbx, staged_fbx)
             unit_bones = {bone.name for bone in armature.data.bones if bone.parent is None}
             unit_bones.update(name for spec in plan.get("leg_cleanup", {}).values()
                               for name in spec.get("deform_chain", []))

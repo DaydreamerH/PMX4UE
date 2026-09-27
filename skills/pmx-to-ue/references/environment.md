@@ -1,14 +1,14 @@
 # 环境与执行
 
-先确定三个独立路径：工作流仓库、目标 `.uproject`、源 PMX 包。不要从当前目录推断它们相同。移动到新电脑后更新角色配置的绝对路径；通用代码不改。复制整个工作流，不需要原 MMD2UE 工程。
+先确定三个独立路径：工作流仓库、目标 `.uproject`、源 PMX 包。不要从当前目录推断它们相同。移动到新电脑后更新角色配置的绝对路径；通用代码不改。复制整个工作流，不需要任何历史实验工程。
 
-本地 MMD2UE 开发约定：用户已指定后续实验默认在 `MMD2UE.uproject` 内完成，用新资产目录隔离，不新建测试工程。下列空白项目/插件打包步骤仅供用户明确要求的外部工程迁移，不作为本地实验默认步骤。MMD2UE 中直接编译现有 Editor 模块，姿态读取使用 `MMD2UERetargetTools`，不要安装重名 Runtime 插件。
+以用户指定工程及其本地约定为准，默认在该工程内使用独立资产版本，不自行创建新的 UE 测试工程。下列独立打包/空白项目验证仅用于明确的插件分发或跨工程测试。宿主已经提供原生接口时复用其模块，避免重复加载同名反射类型。
 
 1. `pmx4ue.py init` 生成角色 work order；需要真实 PMX、现有目标工程和按米计的 PMX 单位比例。`doctor` 只检查路径，不检查插件是否已编译。
 2. Blender 3.6 配置可导入 `mmd_tools` 的环境。导入在独立后台进程完成，Blender 异常使用 `--python-exit-code 1` 返回失败。版本不符先做只读 API 探针，不自动下载安装。
 3. `RunUAT BuildPlugin` 先在独立 HostProject 编译；本包的 Runtime 节点与 Editor 工具已经分离，Editor 依赖不会进入 Shipping Runtime。参照 README 的命令。
 4. `maintenance/verify_plugin.py --engine <UE根> --plugin <打包输出> --output <新目录>` 创建空白验证工程并检查 Python API，不修改现有工程。源码/打包插件安装器拒绝覆盖已有目录；更新由 agent 审阅 diff 后单独处理。
-5. 不要把本插件装进已含原 `FAnimNode_PmxFilteredRigidBody` 的 MMD2UE 工程。同名 UE 反射类型会冲突；新插件用于独立目标工程。
+5. 不要把本插件装进已含 `FAnimNode_PmxFilteredRigidBody` 等同名原生类型的工程。`ue_bridge.py` 检查可用 provider；类名兼容旧宿主不意味着需要该宿主的工程或内容。
 
 ## 运行记录
 

@@ -1,6 +1,45 @@
-# 0.1.0 验证记录
+# 验证记录与版本边界
+
+## 0.2.0 源码归档（2026-09-27）
+
+按用户要求归档此前有效但未提交的通用补全、物理迭代、测试及案例证据，并加入独立迁移入口 `START_HERE.md` / `templates/import-agent.md`。本节之后的“未提交”“未运行”等文字保留历史时间点，不作为当前 Git 状态；各阶段的实测限制仍然有效。
+
+本版包含完整的通用脚本与插件源码依赖，不包含历史资产、缓存或预编译插件。源码版本为 0.2.0；旧 `.local/PackagedPlugin*` 不含最新 SDF，不能作为本版二进制分发。本轮不新建 UE 工程，不把源码归档宣称为新角色全链或打包游戏验收。先前独立编译记录仅覆盖各自当时源码；含最新 SDF 的完整插件应在目标引擎重新构建。
+
+最新 SDF 验证见 `characters/TololoSchool1001/face-sdf-runtime-v1-decision.md`：实际材质编译、新进程重载及 120 帧动画参数测试通过。本轮在用户要求停止测试之前已运行工作树 127 项 Python 测试，通过；随后按要求不再执行解压副本测试、UE 编译或功能验证，交由另一个 agent 在目标工程测试。新增发行结构检查不等于源码包已实际跨工程运行。FBX 精度修正依赖 Blender/FBX 的实际实验，不由纯 Python 套件代替。上半身导出分支、跨模型视觉、LOD/打包、多角色及完整性能验收仍保留待验证项。
 
 日期：2026-09-26。此文件区分原工程经验与**复制后的独立工作流**实测。
+
+## 通用流水线补全（2026-09-27，未提交）
+
+以下是本轮最新证据，优先于下方历史的“未运行/旧采集器”描述。测试均在 MMD2UE 新命名空间，不覆盖已认可资产；独立插件仅做分发构建，不重复安装到 MMD2UE。
+
+- 新增能力探测与 MMD2UE/PMX4UE 双 provider 适配、PMX 原始骨名映射、审核式动画批导出、rest-only 分支、Base Bone Space/运动限幅、通用 15/30/60Hz 与卡顿/持续移动测试、实际尺寸 PIE 性能采集及复核、材质编译阶段。
+- 114 项离线回归、Python compileall、diff 空白检查通过；独立插件 Editor、Game Development、Game Shipping BuildPlugin 退出 0；MMD2UEEditor 最小桥编译通过。
+- 动画批导出：真实 UEFN→托洛洛新动画保存，输入哈希不变。输出 `/Game/PMX4UE/WorkflowProbe/v1/Animations`。加强 Skeleton/Rig 哈希保护后，再用通用合同生成的 RTG 导出 `/Game/PMX4UE/WorkflowPoseProbe/v1/Animations`，退出0；报告在该配对的 `animation_export.json`。源动作 PoseSearch Notify 有序列化警告，动画通知语义仍须审核，不将位姿导出成功视为玩法通知完整验收。
+- 通用 Agent T-Pose 合同：实际不同 Source/Target 的采集→模型/配对→编译→写入→新进程重载通过。位置误差 0，旋转最大 <0.000003°；新资产 `/Game/PMX4UE/WorkflowPoseProbe/v1/RTG_AgentContract`。视觉/更多动作仍单独待验收。
+- 通用动态物理：2 PA + 4 ABP 构建成功，新进程 4 项基础和 6 项运动/卡顿测试完成，444 动态骨骼及 shape 过滤读回通过。使用审核过的案例分区，不是任意模型自动语义识别；也没有把最新 ChestFollow 外观决定强行设成通用默认。
+- 无动画分支：独立 `/Game/PMX4UE/WorkflowRestProbe/v1/Physics` 的 PA/静止 ABP 构建及新进程 720 帧测试通过，结果 `rest_measured_movement_pending`；没有动画或性能伪通过。报告 `Saved/PMX4UE/WorkflowRestProbe_v1`。
+- 真实 PIE 三轮交替：实际 viewport 1920×1080、离屏、t.MaxFPS=200、20 秒计时/项、进程退出 0。候选平均 76.34–78.65FPS，最差 P99 18.60ms；无物理平均 70.91–77.69FPS，最差 P99 19.25ms。复核为 `control_below_budget`，不是稳定60FPS通过。视口尺寸不是内部 shading 分辨率；HighResShot 1000×1000 图片只是计时外画面证据。
+- 材质父链编译：现有角色三个 master 在 PCD3D_SM6 编译成功、退出0，不保存材质；不是从新 PMX 全套新材质的视觉验收。第一次拿历史不同 schema 报告被阻止，保留失败日志。
+- Blender 源身份：注册 mmd_tools 后读取实际 .blend，616 个唯一原始 PMX 名→导出名，无歧义。初次未加载插件得到空映射并失败，未猜测补齐。
+
+本机报告：`Saved/PMX4UE/WorkflowProbe_v1/`（animation_export/physics_build/physics_test/material_compile_v2/bone_identity_v2）、其 `Performance_1080p_v2/performance.json` 与 `review.json`；姿态 `Saved/PMX4UE/WorkflowPoseProbe_v1/`。源码复现入口在 maintenance，包含案例路径，不能作为通用默认配置。新项目按 `docs/fresh-project-runbook.md` 重新初始化。
+
+**绑定告警修复（同轮后续）：** 原始厘米 FBX 在 SDK 有83个相对矩阵不一致，重算 Cluster.Transform 无效。查明近单位基底存在累计尺度漂移，加入 ≤100ppm 的有界正交化与双精度相对矩阵重算，完整绑定姿态 SDK 检查通过；UE 新目录 `/Game/PMX4UE/WorkflowBindProbe/v2` 导入退出0，无 invalid bind poses、无非单位组件骨。最大绑定基底元素调整约 0.00003743，平移、模型局部变换、层级、顶点/权重/形态键均未改；编码后逐字段重读校验。`tools/blender_fbx_bind.py` 已接入普通厘米和 upper-only 导出，普通导出保留 raw。再次从原 PMX 运行新的普通导出成功（664骨、源名映射、单位检查）；上半身分支接线仍未单独重跑。本轮未做修正后整套动态蒙皮视觉验收。
+
+SDK 中原有单 mesh 的不完整 shape bind pose 仍报告缺 deformer，但完整 skin bind pose 通过，UE 不再输出绑定警告。不随意删除 shape 数据。旧审计误把相对 Transform 当全局矩阵，已更正。**零长度法线消息仍在**，不属于此精度修正范围。新模型任何绑定/法线风险都会记录为 `executed_with_import_risks`，不自动生产通过。证据：`Saved/PMX4UE/WorkflowBindProbe_v2_import.log`、`WorkflowBindProbe_v2/inspection.json`、`WorkflowExportProbe_v3/blender_manifest.json`。
+
+本机出现 Zen 缓存 Insufficient Storage (507)；未更改缓存/RHI/画质或删除用户数据，也不凭共现认定其导致性能尾帧。第二角色、新项目全链、打包/多角色/接触质量仍待各自实测。不能把本次工具补全称为任意 PMX 全自动生产验收。
+
+## 物理流程再整理（2026-09-27）
+
+新增 `docs/agent-physics-workflow.md`、`templates/physics-agent.md` 和离线 `tools/review_physics_benchmark.py`，连接技能参考、README 与交接模板。流程包括换动画不绕过 ABP 物理、按症状选择最小实验、实际 GameViewport 证据及分层验收。本轮只改工作台工具/文档，不改 UE 资产，不重新启动 UE，不自动提交。
+
+- 纯逻辑回归 101 项通过（新增 10 项，覆盖缺失证据、帧数不一致、非有限值、非零退出、P99 超预算、控制异常、重复不足、小视口和输出拒绝覆盖）。
+- 复核真实 `Saved/PMX4UE/PhysicsAcceptance_Offscreen_v3/report.json`：`measured_scope_pass`，实际 655×325，`viewport_target_met=false`，`production_accepted=false`。输出位于同目录 `review-workflow-v1.json`；默认 1080p 目标不满足时 CLI 返回 2，这是范围不足，不是物理失败。
+- 真实 UE 测试沿用 [物理复测记录](characters/TololoSchool1001/physics-acceptance-v2-decision.md)，不是本轮重新跑分。用户随后认可物理观感；这不能替代完整接触、目标分辨率、打包和多角色验收。
+- 新工具仅处理已知 `tests[]` 报告格式，复核的是记录的过程与数值；进程退出码由启动器/agent 提供，完整依赖哈希与画面仍由 agent 核查。不是通用 UE 采集器或任意 PMX 的自动生产批准工具。
 
 ## Agent 通用 T-Pose 流程（2026-09-27）
 

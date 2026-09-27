@@ -15,9 +15,8 @@ from retarget_pose_math import plan, verify, angle, sub, posture_metrics, stance
 
 
 def inspect(asset, side):
-    bridge = getattr(unreal, "MMD2UERetargetTools", None) or getattr(unreal, "PMX4UERetargetTools", None)
-    if bridge is None:
-        raise RuntimeError("Missing retarget pose inspection bridge in the current project")
+    from ue_bridge import resolve
+    bridge = resolve("retarget", unreal)
     data = json.loads(bridge.inspect_retarget_pose(asset.get_path_name(), side == "source"))
     if data.get("status") != "inspected":
         raise RuntimeError(data)

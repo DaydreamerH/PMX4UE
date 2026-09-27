@@ -7,6 +7,7 @@ import sys
 import unreal
 
 package = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(package / "tools"))
 sys.path.insert(0, str(package / "tools/legacy"))
 config_path = Path(os.environ["PMX4UE_CONFIG"])
 config = json.loads(config_path.read_text(encoding="utf-8"))
@@ -16,7 +17,7 @@ if actual != Path(config["pmx4ue"]["project"]).resolve().parent:
 stage = os.environ["PMX4UE_STAGE"]
 if stage == "physics-build":
     plan = json.loads(Path(os.environ["PMX_PHYSICS_PLAN"]).read_text(encoding="utf-8"))
-    paths = [p["asset"] for p in plan["partitions"]] + [plan["rest_blueprint"], plan["walk_blueprint"]]
+    paths = [p["asset"] for p in plan["partitions"]] + [p for p in (plan["rest_blueprint"], plan["walk_blueprint"]) if p]
     paths += list(plan.get("performance_controls", {}).values())
     if any(not p.startswith(config["paths"]["ue_root"] + "/") for p in paths):
         raise RuntimeError("Physics destinations must belong to this character variant")

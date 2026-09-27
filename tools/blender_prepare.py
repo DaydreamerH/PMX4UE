@@ -22,6 +22,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "legacy"))
 from blender_fbx_units import (
     assert_cm_native_contract, audit_fbx_units, prepare_cm_native_scene,
 )
+from bone_identity import collect as collect_bone_identity
+from blender_fbx_bind import normalize as normalize_fbx_bind
 
 
 def parse_args() -> argparse.Namespace:
@@ -180,9 +182,12 @@ def main() -> None:
         obj.select_set(True)
     bpy.context.view_layer.objects.active = armature
 
-    print(f"[MMD2UE] exporting {fbx_path}")
+    raw_fbx = fbx_path.with_name(fbx_path.stem+'.raw.fbx') if args.fbx_units == 'cm-native' else fbx_path
+    if args.fbx_units == 'cm-native' and raw_fbx.exists():
+        raise FileExistsError('Raw FBX exists; choose a fresh export directory')
+    print(f"[MMD2UE] exporting {raw_fbx}")
     bpy.ops.export_scene.fbx(
-        filepath=str(fbx_path),
+        filepath=str(raw_fbx),
         use_selection=True,
         object_types={"ARMATURE", "MESH"},
         use_mesh_modifiers=False,
@@ -200,6 +205,7 @@ def main() -> None:
         path_mode="COPY",
         embed_textures=False,
     )
+    bind_normalization = normalize_fbx_bind(raw_fbx, fbx_path) if args.fbx_units == 'cm-native' else None
     bone_samples = {}
     if args.fbx_units == "cm-native":
         for bone in armature.data.bones:
@@ -223,12 +229,14 @@ def main() -> None:
         "outputs": {"fbx": str(fbx_path), "blend": str(blend_path), "textures": str(texture_dir)},
         "scale": args.scale,
         "fbx_units_mode": args.fbx_units,
+        "bind_precision": bind_normalization,
         "fbx_units": fbx_units,
         "bounds": bounds,
         "armature": {
             "name": armature.name,
             "bones": [bone.name for bone in armature.data.bones],
             "bone_count": len(armature.data.bones),
+            "source_bone_identity": collect_bone_identity(armature),
         },
         "meshes": [
             {

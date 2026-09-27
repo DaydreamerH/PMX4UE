@@ -116,4 +116,4 @@ build(profile, profile["agent_contract"]["pair"]["namespace"], r"D:/实际输出
 
 ## 当前验证边界
 
-本轮只进行了低负载离线测试，未启动 UE、未修改案例资产。覆盖异名骨架、不同体型/组件方向、历史 Scale=100、错误链映射、Spine 包含腿祖先、旧指纹、前后修正顺序、拒绝覆盖等。通用 UE 新入口尚需真实运行和跨模型效果验收；已有托洛洛 v5 的认可不能代替新工作流的多模型验证。
+2026-09-27 补充真实集成验证：通用 inventory→model/pair→compile→build→新进程 reload 已在 UEFN→托洛洛实际不同骨架上通过。新资产 `/Game/PMX4UE/WorkflowPoseProbe/v1/RTG_AgentContract`；重载位置误差 0，旋转误差 <0.000003°。报告在目标项目 `Saved/PMX4UE/WorkflowPoseProbe_v1`。不是新模型全链视觉验收；已有 v5 用户认可不能替代其它模型结果。离线仍覆盖异名骨架、体型/方向、Scale=100、错误链、腿祖先、指纹、修正顺序及拒绝覆盖。

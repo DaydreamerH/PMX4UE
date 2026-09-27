@@ -7,6 +7,8 @@ import unreal
 
 root = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(root / "tools/legacy"))
+sys.path.insert(0, str(root / "tools"))
+from ue_bridge import resolve
 from ue_context import BuildContext
 
 ctx = BuildContext(os.environ["PMX4UE_CONFIG"], strict=False, require_map=False)
@@ -16,7 +18,7 @@ if Path(unreal.Paths.project_dir()).resolve() != expected:
 if unreal.EditorAssetLibrary.list_assets(ctx.names["ue_root"], True, False):
     raise RuntimeError("Smoke import requires empty destination namespace")
 mesh = ctx.import_skeletal_mesh()
-report = json.loads(unreal.PMX4UEPmxSkirtTools.inspect_physics_mesh(mesh.get_path_name()))
+report = json.loads(resolve("physics").inspect_physics_mesh(mesh.get_path_name()))
 if report.get("status") != "inspected":
     raise RuntimeError(report)
 report["non_unit_bones"] = [b["name"] for b in report["bones"] if any(abs(x-1) > .001 for x in b["component_scale"])]

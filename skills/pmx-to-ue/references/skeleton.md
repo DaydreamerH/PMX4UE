@@ -6,7 +6,9 @@
 
 `skeleton-audit` 读取已保存的源 `.blend`，输出权重、层级、骨骼引用。静态外观正确并不证明 bind pose 或动画正确。不要仅凭截图中骨骼显示长度或 component scale 判断 local scale；比较同一坐标空间。
 
-**已知未解决项：** 本仓库独立导入测试仍出现 Interchange `invalid bind poses` / time-zero rebind 警告。当前厘米路径是隔离实验基线，不是已经证明可无警告替换生产资产的导出器。遇到该警告将骨骼验收标为待处理，不能只设 use_t0_as_ref_pose 掩盖。使用 `blender --background --python tools/legacy/blender_audit_fbx_bind_pose.py -- <文件.fbx>` 对比 BindPose / TransformLink；该静态对比也不能代替 UE 动态蒙皮验证。记录具体引擎导入日志、骨名与矩阵，再决定是否修正 FBX 导出适配。
+**绑定精度修正：** 原路径的 float32 累积矩阵漂移曾导致 Interchange `invalid bind poses`。厘米导出现在经 `tools/blender_fbx_bind.py` 修正近单位绑定基底和相对矩阵：仅允许 ≤100ppm 的尺度漂移，保持平移、模型局部变换、层级、几何/权重不变，并重读 FBX 校验全部字段。非单位/反射/真实绑定不一致会拒绝处理。普通导出保留 `.raw.fbx`，manifest 记录修正量。托洛洛完整 SDK 绑定检查与 UE 新目录导入已通过，不再有该绑定告警；不能据此免除新角色的蒙皮和动作验收。仍有 zero length normal 消息，需独立处理几何/法线。
+
+新模型仍出现绑定警告时将骨骼验收标为待处理，不能设 use_t0_as_ref_pose 掩盖。`blender_audit_fbx_bind_pose.py` 只是序列化矩阵诊断（多 mesh 对比有限），不能代替 SDK/UE 验证。精度修正也不能处理错误父级、错单位或真正的非单位骨缩放。
 
 ## 默认保留、按需优化上半身
 
@@ -21,7 +23,7 @@
 
 ## IK 与动画
 
-新模型/新配对使用 `docs/agent-retarget-workflow.md` 与 `templates/retarget-agent.md`：先采集，agent 审核真实语义和身体坐标，复用模型档案、单独规划配对，再原生写入与分层验收。不要把某角色的恢复骨名或数值固定成通用默认值。通用化入口目前只完成离线验证，不能照搬历史案例的视觉通过状态。
+新模型/新配对使用 `docs/agent-retarget-workflow.md` 与 `templates/retarget-agent.md`：先采集，agent 审核真实语义和身体坐标，复用模型档案、单独规划配对，再原生写入与分层验收。不要把某角色的恢复骨名或数值固定成通用默认值。通用入口已在 UEFN→托洛洛完成 UE 原生生成与新进程重载，但不能照搬历史案例的视觉通过状态。
 
 T-Pose 规范化见 `docs/retarget-pose.md`：先确认 Source 与 Target 的实际 mesh/链条，对两侧分别生成命名姿态并验证。MMD2UE 内实验使用真实源动画 Rig 与已经认可的目标 mesh，不以同骨架 smoke test 代替实际对齐；不改绑定姿态。
 
@@ -43,7 +45,7 @@ T-Pose 规范化见 `docs/retarget-pose.md`：先确认 Source 与 Target 的实
 
 不要直接运行上述中文占位值。agent 从 UE 导入后的层级生成四肢、脊柱、颈头及需要的手指链。`source=null` 只创建目标 IK，空白项目不强行依赖 Manny。若已有源动画骨架，source 使用同结构 mesh/asset/pelvis/chains；新源 Rig 也建在当前变体目录，不改已有源 Rig。`ik` 检查端点存在及父子路径，建立默认 retarget op stack 和同名链映射。
 
-Rig 配置完成并不等于动画导出完成。当前工具不自动导出重定向动画，agent 在编辑器或新增受测脚本中调整姿势、检查 pelvis motion/root motion，导出**新的**目标动画。不得更改原动画的 root lock 来隐蔽结果差异。
+Rig 配置完成并不等于动画导出完成。agent 调整姿势并检查 pelvis motion/root motion 后，使用 `animation-export` 导出新的目标动画，配置见 `templates/animation_export.example.json`。工具检查 Skeleton、RTG 实际配对、独立输出与输入哈希；不得改原动画 root lock 隐蔽差异。真实 UE 5.8.2 导出已验证，视觉动作仍逐例审核。
 
 用真实权重判断普通 leg 与 D leg 哪条驱动 mesh，而不是名字判定。MMD 上半身和下半身的共同父链必须继承 pelvis 位移；上下身分离时对比已知正常版本的层级、局部/组件变换、重定向输出，不能只反复改 Root 开关。根运动根与 pelvis 的语义不同，不强迫给没有对应语义的骨骼建立 Root 链。
 
