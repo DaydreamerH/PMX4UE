@@ -15,9 +15,9 @@
   ],
   "lights": [
     {"name": "DefaultDaylight"},
-    {"name": "ObliqueKey_AdjustToCharacter", "yaw_offset": "REPLACE_AFTER_MODEL_AND_SUN_REVIEW"}
+    {"name": "FrontLeft45_FromCharacter", "yaw_offset": "REPLACE_WITH_CHARACTER_FORWARD_YAW_PLUS_135_MINUS_INITIAL_SUN_YAW"}
   ],
-  "primary_light": "ObliqueKey_AdjustToCharacter",
+  "primary_light": "FrontLeft45_FromCharacter",
   "modes": ["Lit"],
   "diagnostic_captures": [],
   "cases": [{"name": "Baseline", "slots": []}]
