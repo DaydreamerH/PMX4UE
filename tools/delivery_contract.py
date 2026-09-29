@@ -11,6 +11,8 @@ from tools.material_preview_contract import verify_report
 from tools.face_shading_delivery import review_face_shading
 from tools.scene_effect_delivery import review_scene_effects
 from tools.material_feature_delivery import review_material_features, review_scene_gameplay
+from tools.light_direction_delivery import review_light_direction
+from tools.target_image_delivery import review_target_images
 
 
 def digest(path):
@@ -159,7 +161,9 @@ def review_delivery(profile, project):
         review_face_shading(profile, slot_rows, debts, reports, capture_cases, issue, evidence_hashes)
         review_scene_effects(profile, reports, issue)
         review_material_features(profile, slots, reports, capture_cases, issue)
+        review_light_direction(profile, reports, issue)
         review_scene_gameplay(profile, reports, issue)
+        review_target_images(profile, capture_cases, issue, evidence_hashes)
     for ident in sorted(set(debts) | risks):
         row = resolutions.get(ident, {})
         # Never silently mark a still-disabled feature 'fixed'. It can only be

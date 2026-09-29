@@ -79,6 +79,25 @@ class PreviewContractTests(unittest.TestCase):
         del self.profile["modes"]
         self.assertEqual(len(capture_jobs(self.profile)), 2)
 
+    def test_light_sweep_template_is_small_and_requires_model_review(self):
+        path = Path(__file__).resolve().parents[1] / "templates/material_light_sweep.example.json"
+        profile = json.loads(path.read_text(encoding="utf-8"))
+        self.assertFalse(profile["reviewed"])
+        profile["reviewed"] = True
+        with self.assertRaisesRegex(ValueError, "Invalid daylight override"):
+            validate(profile, "/Game/PMX4UE/Character/v1")
+        profile["lights"][1]["yaw_offset"] = 37
+        validate(profile, "/Game/PMX4UE/Character/v1")
+        self.assertEqual(len(capture_jobs(profile)), 2)
+        self.assertEqual(capture_jobs(profile)[0][2]["name"], profile["primary_light"])
+        self.assertEqual(profile["lights"][0], {"name": "DefaultDaylight"})
+        profile["lights"].append({"name": "AlternateAngle", "yaw_offset": -52})
+        validate(profile, "/Game/PMX4UE/Character/v1")
+        self.assertEqual(len(capture_jobs(profile)), 3)
+        profile["primary_light"] = "Unknown"
+        with self.assertRaisesRegex(ValueError, "primary_light"):
+            validate(profile, "/Game/PMX4UE/Character/v1")
+
     def test_invalid_modes_rejected(self):
         for modes in ([], ["Unlit"], ["Lit", "Lit"], ["Lit", "Invalid"], "Lit", ["Lit", {}]):
             self.profile["modes"] = modes

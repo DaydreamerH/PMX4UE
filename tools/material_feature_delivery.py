@@ -17,8 +17,8 @@ def has_refs(row, reports):
 
 
 def review_material_features(profile, slots, reports, captures, issue):
-    if profile.get("material_review_contract") != 1:
-        issue("Material review contract 1 required: migrate feature decisions and acceptance scope")
+    if profile.get("material_review_contract") not in {1, 2}:
+        issue("Material review contract 1 or 2 required: migrate feature decisions and acceptance scope")
     if profile.get("material_acceptance") not in {"static_lookdev", "game_ready"}:
         issue("Choose material_acceptance=static_lookdev or game_ready; static screenshots are not game validation")
     features = profile.get("material_features", {})

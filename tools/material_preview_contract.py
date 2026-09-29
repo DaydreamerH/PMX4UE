@@ -104,8 +104,14 @@ def capture_jobs(profile):
             and len(modes) == len(set(modes)) and "Lit" in modes
             and set(modes) <= {"Lit", "Unlit", "WorldNormal"},
             "Capture modes must include Lit, contain no duplicates and use supported modes")
+    lights = profile["lights"]
+    primary = profile.get("primary_light")
+    if primary:
+        require(primary in {light["name"] for light in lights}, "Unknown primary_light")
+        lights = [next(light for light in lights if light["name"] == primary),
+                  *[light for light in lights if light["name"] != primary]]
     jobs = [(c, v, l, m) for c in profile["cases"] for v in profile["cameras"]
-            for l in profile["lights"] for m in modes]
+            for l in lights for m in modes]
     keys = {(c["name"], v["name"], l["name"], m) for c, v, l, m in jobs}
     diagnostics = profile.get("diagnostic_captures", [])
     require(isinstance(diagnostics, list), "diagnostic_captures must be a list")
@@ -173,6 +179,10 @@ def validate(profile, namespace, source_mesh=None):
         names = [r["name"] for r in rows]
         require(rows and len(names) == len(set(names)) and
                 all(re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", n) for n in names), "Invalid/duplicate " + field)
+    if "primary_light" in profile:
+        require(visible and isinstance(profile["primary_light"], str) and
+                profile["primary_light"] in {row["name"] for row in profile["lights"]},
+                "primary_light must name an existing v3 light")
     for camera in profile["cameras"]:
         if visible:
             camera_spec(camera)

@@ -2,8 +2,13 @@
   "schema": "pmx4ue.delivery.v2",
   "project": "D:/YourProject/YourProject.uproject",
   "scope": ["materials"],
-  "material_review_contract": 1,
+  "material_review_contract": 2,
   "material_acceptance": "static_lookdev",
+  "light_direction_review": {
+    "status": "pending", "effect": "face_shadow", "reason": "Review selected material under the template sun and a model-specific rotated sun",
+    "images_opened": false, "reviewer": "", "image_sha256": [],
+    "observations": {"shadow_transition": "", "highlight_response": "", "failure_or_limitation": ""}
+  },
   "material_features": {
     "eye_layers": {"status": "pending", "slots": [], "reason": "", "evidence": ["face_design"], "effect": "eye_layers_ab", "observations": {"geometry_layers": "", "highlight_shadow": "", "side_view": ""}, "next_action": "Inspect real eye geometry, UV and painted highlights; implement layered behavior or a justified single-layer alternative"},
     "hair_clumps": {"status": "pending", "slots": [], "reason": "", "evidence": ["face_design"], "effect": "hair_highlight", "observations": {"uv_direction": "", "clump_shape": "", "view_light_response": ""}, "next_action": "Inspect strand UV/masks; compare highlight off/on and front/oblique views, not only hair color"},
@@ -35,6 +40,7 @@
       "effect": "face_shadow",
       "texture_asset": "/Game/PMX4UE/Character/lookdev/Textures/T_Character_FaceSDF",
       "texture_audit": "face_texture_check",
+      "light_response": "linear_azimuth_v1",
       "light_tests": {"front": "REPLACE_IMAGE_SHA256", "left": "REPLACE_IMAGE_SHA256", "right": "REPLACE_IMAGE_SHA256"},
       "sweep_review": {
         "images_opened": false,
