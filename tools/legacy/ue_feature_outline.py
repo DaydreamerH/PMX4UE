@@ -2,8 +2,7 @@
 
 Distance-constrained vertex-normal extrusion with backface-only opacity, plus
 optional UV-ellipse suppression of internal face lines (eyes/mouth).  Ellipse
-regions and widths are configurable per character; defaults suit a typical
-MMD anime face.
+regions and widths must be calibrated per character. No universal face UV mask.
 """
 
 from __future__ import annotations
@@ -17,6 +16,9 @@ import unreal
 FRAMEWORK_DIR = Path(__file__).resolve().parent
 if str(FRAMEWORK_DIR) not in sys.path:
     sys.path.insert(0, str(FRAMEWORK_DIR))
+if str(FRAMEWORK_DIR.parent) not in sys.path:
+    sys.path.insert(0, str(FRAMEWORK_DIR.parent))
+from outline_contract import face_regions
 
 from ue_context import (  # noqa: E402
     BuildContext,
@@ -28,13 +30,6 @@ from ue_context import (  # noqa: E402
     scalar,
     vector,
 )
-
-DEFAULT_FACE_REGIONS = (
-    {"name": "FaceOutlineLeftEyeRegion", "center": [0.325, 0.475], "radius": [0.150, 0.090]},
-    {"name": "FaceOutlineRightEyeRegion", "center": [0.675, 0.475], "radius": [0.150, 0.090]},
-    {"name": "FaceOutlineMouthRegion", "center": [0.500, 0.705], "radius": [0.120, 0.055]},
-)
-
 
 def ellipse_outside_mask(material, uv, name, center, radius, x, y):
     """Return 0 inside a soft UV ellipse and 1 outside it."""
@@ -91,6 +86,7 @@ def _build_instance(material, root, name, width, face_internal_mask=0.0):
 
 def build(ctx: BuildContext) -> dict:
     options = (ctx.config.get("features", {}) or {}).get("outline", {}) or {}
+    regions = face_regions(options)  # Validate before creating any UE asset.
     root = ctx.names["material_root"]
     material = load_or_create_material(ctx.names["outline_asset"], root, fresh=True)
     for name, value in (
@@ -144,8 +140,7 @@ def build(ctx: BuildContext) -> dict:
     connect(outline_opacity, "", opacity, "B")
 
     face_uv = expression(material, unreal.MaterialExpressionTextureCoordinate, -1480, 1040)
-    safe_set(face_uv, "coordinate_index", 0)
-    regions = options.get("face_internal") or DEFAULT_FACE_REGIONS
+    safe_set(face_uv, "coordinate_index", options.get("face_uv_channel", 0))
     outside_nodes = []
     for index, region in enumerate(regions):
         outside_nodes.append(
@@ -155,7 +150,9 @@ def build(ctx: BuildContext) -> dict:
                 -1260, 1040 + index * 400,
             )
         )
-    internal_outside = outside_nodes[0]
+    internal_outside = outside_nodes[0] if outside_nodes else expression(material, unreal.MaterialExpressionConstant, 520, 1040)
+    if not outside_nodes:
+        safe_set(internal_outside, "r", 1.0)
     for node in outside_nodes[1:]:
         combined = expression(material, unreal.MaterialExpressionMultiply, 520, 1120)
         connect(internal_outside, "", combined, "A")
@@ -182,7 +179,7 @@ def build(ctx: BuildContext) -> dict:
 
     prefix = ctx.names["instance_prefix"]
     general = _build_instance(material, root, f"{prefix}_Outline", options.get("width", 0.00095))
-    face = _build_instance(material, root, f"{prefix}_Outline_Face", options.get("width", 0.00095), 1.0)
+    face = _build_instance(material, root, f"{prefix}_Outline_Face", options.get("face_width", options.get("width", 0.00095)), float(bool(regions)))
     hair = _build_instance(material, root, f"{prefix}_Outline_Hair", options.get("hair_width", 0.00072))
 
     report = {
@@ -192,6 +189,11 @@ def build(ctx: BuildContext) -> dict:
         "width": "VertexNormalWS * clamp(camera distance, min, max) * per-slot width",
         "culling": "TwoSidedSign backface only",
         "internal_line_control": "UV ellipse suppression + per-slot overlay exclusion",
+        "face_internal_enabled": bool(regions),
+        "face_uv_channel": options.get("face_uv_channel", 0),
+        "face_internal_regions": regions,
+        "face_internal_evidence": options.get("face_internal_evidence"),
+        "visual_status": "pending: inspect mouth corners with outline off/on and calibrated face candidate",
         "duplicate_mesh_asset": False,
     }
     ctx.report_path("outline_build_report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

@@ -9,6 +9,7 @@ disconnected unary nodes, and emits the list of parent materials the live MCP
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -25,6 +26,7 @@ from mmd2ue_core import TEXTURE_PARAMETER_NAMES  # noqa: E402
 from ue_context import BuildContext  # noqa: E402
 from ue_material_instances import material_asset_name  # noqa: E402
 from material_input_policy import effective_scalars
+from ue_face_sdf_nodes import decoder_encoding
 
 UNARY_CLASSES = {
     "MaterialExpressionSaturate",
@@ -128,6 +130,10 @@ def main() -> None:
         violations.append(f"mesh/source slot count mismatch {len(mesh_materials)} != {len(manifest_slots)}")
 
     slots_audit = []
+    try:
+        master_sdf_encoding = decoder_encoding(master)
+    except Exception:
+        master_sdf_encoding = None  # Missing readback is not a verified convention.
     for index, entry in enumerate(ctx.slot_entries()):
         slot_name = entry["slot"]
         instance_path = f"{root}/{ctx.names['instance_prefix']}_{material_asset_name(slot_name)}"
@@ -158,6 +164,8 @@ def main() -> None:
 
         effective = {}
         input_audit = []
+        scalar_readback = {str(name): _scalar_value(instance, str(name))
+                           for name in unreal.MaterialEditingLibrary.get_scalar_parameter_names(instance)}
         supported = {str(n) for n in unreal.MaterialEditingLibrary.get_texture_parameter_names(instance)}
         for role, parameter in TEXTURE_PARAMETER_NAMES.items():
             expected = entry["textures"].get(role)
@@ -174,6 +182,16 @@ def main() -> None:
             input_audit.append(dict(role=role, source="declared" if expected else "generated_neutral",
                                     actual=actual_texture.get_path_name() if actual_texture else None,
                                     expected=expected_texture.get_path_name() if expected_texture else None))
+            if role == "face_sdf" and expected and actual_texture:
+                try:
+                    import_data = actual_texture.get_editor_property("asset_import_data")
+                    source_file = Path(import_data.get_first_filename()) if import_data else None
+                    if source_file is None or not source_file.is_file():
+                        raise ValueError("Face SDF import source is unavailable")
+                    input_audit[-1]["import_source"] = str(source_file.resolve())
+                    input_audit[-1]["import_source_sha256"] = hashlib.sha256(source_file.read_bytes()).hexdigest()
+                except Exception as error:
+                    input_audit[-1]["import_source_error"] = str(error)
             effective[role] = actual
 
         if parent_is_master or route in {"stocking", "cloth"} or route in parent_assets:
@@ -198,6 +216,8 @@ def main() -> None:
             "parent": parent.get_path_name() if parent else None,
             "declared_route": route,
             "effective_textures": effective,
+            "effective_scalars": scalar_readback,
+            "face_sdf_encoding": master_sdf_encoding if parent_is_master else None,
             "input_audit": input_audit,
         })
 

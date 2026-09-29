@@ -1,0 +1,32 @@
+{
+  "schema": "pmx4ue.material-game-test.v1",
+  "project": "D:/YourProject/YourProject.uproject",
+  "effects": ["outline", "rim"],
+  "check": "performance",
+  "passed": false,
+  "reviewer": "",
+  "observation": "",
+  "evidence": ["REPLACE_RAW_TRACE_OR_CAPTURE_EVIDENCE_ID"],
+  "asset_sha256": {
+    "/Game/REPLACE_MESH": "REPLACE",
+    "/Game/REPLACE_MATERIAL": "REPLACE",
+    "/Game/REPLACE_RUNTIME_BP": "REPLACE"
+  },
+  "budget": {"frame_p99_ms": null, "added_gpu_p95_ms": null},
+  "measurements": {
+    "off": {
+      "active_effects": [],
+      "hardware": "", "engine": "", "execution_mode": "", "resolution": "", "quality": "", "camera_path": "", "animation": "", "actor_count": null,
+      "physics": "", "exposure_policy": "default_scene", "max_fps": 200, "vsync": false,
+      "warmup_seconds": null, "duration_seconds": null, "frames": null,
+      "frame_p95_ms": null, "frame_p99_ms": null, "gpu_p95_ms": null, "game_p95_ms": null
+    },
+    "on": {
+      "active_effects": ["outline", "rim"],
+      "hardware": "", "engine": "", "execution_mode": "", "resolution": "", "quality": "", "camera_path": "", "animation": "", "actor_count": null,
+      "physics": "", "exposure_policy": "default_scene", "max_fps": 200, "vsync": false,
+      "warmup_seconds": null, "duration_seconds": null, "frames": null,
+      "frame_p95_ms": null, "frame_p99_ms": null, "gpu_p95_ms": null, "game_p95_ms": null
+    }
+  }
+}

@@ -185,7 +185,7 @@ def _apply_in_level(ctx: BuildContext, rim_material, stencil_value: float):
             volume = actor
             break
     if volume is None:
-        volume = unreal.EditorLevelLibrary.spawn_actor_from_class(unreal.PostProcessVolume, unreal.Vector(0, 0, 0), unreal.Rotator(0, 0, 0))
+        volume = unreal.EditorLevelLibrary.spawn_actor_from_class(unreal.PostProcessVolume, unreal.Vector(0, 0, 0), unreal.Rotator())
         volume.set_actor_label(f"{ctx.names['character_id']}_DepthRim")
     safe_set(volume, "unbound", True)
     safe_set(volume, "blend_weight", 1.0)

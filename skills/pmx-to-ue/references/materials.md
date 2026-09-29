@@ -4,6 +4,10 @@
 
 默认交付目标是角色级 lookdev，不是通用 Master 的基础贴色。材质设计前完整阅读 [material-families.md](../../../docs/material-families.md)，根据实际模型填写 `templates/material-design.md`：逐类确定脸部、头发/刘海、眼睛各层、袜类、不同织物/硬表面和轮廓效果的计算、父图/Pass、输入与验收。颜色正确只算基线；不按 Master 个数考核，但不同行为必须真正实现。文章/案例用作方法参考，不能假定其轴、UV、Pass 或参数适合新模型。
 
+该文包含可选的目标图分析环节：有图时分析外观特征、指导材质设计并对照结果；无图时跳过，依据 PMX、纹理和文字要求继续。无图不等于免除对实际渲染结果的视觉检查。
+
+选择算法前按同文“先核对实际资产，再选择算法”检查必要的几何层、槽/UV、RGB/Alpha 与变形条件。把事实、实现假设和验证办法分开；不能从“丝袜看起来薄”直接决定透明/透射，也不能因缺少检查结果就断言没有皮肤底层。检查范围围绕候选方案，不重复无关审计。
+
 运行 `material-draft`，由 Blender manifest 的真实材质槽生成未绑定草稿。检查源贴图图像、PMX 槽参数、UV、透明类型和参考效果，然后填写 material_map。文件名只提供候选，不能据 `_N` 等后缀自动绑定法线或打包通道。
 
 `presets/materials.v1.json` 提供可编辑的起点；`mmd2ue_core.normalize_material_map` 是规范化接口。按需读取该函数和 `validate_material_map` 的字段约束，不另造不被构建器消费的配置字段。`material-check` 执行纯 Python 的槽覆盖与审核校验；再设置 `pmx4ue.material_reviewed=true`，执行 `ue-build`。此阶段导入选定的 FBX 与贴图，创建材质，不配置或保存用户场景。
@@ -12,13 +16,19 @@
 
 新变体必须使用空命名空间。构建失败产生部分资产时，先检查日志，选择新版本或得到明确范围后清理，不让重复导入覆盖已有角色。
 
-`ue-validate` 检查槽绑定、图连接、纹理配置。报告中 `compile_check_required` 必须另外用插件 `PMX4UEAgentMCPTools.inspect_material_compile` 检查；图连通并不证明 shader 编译成功。最终还需 Lit/Unlit/WorldNormal 和不同光照角度的视觉检查。
+`ue-validate` 检查槽绑定、图连接、纹理配置。报告中 `compile_check_required` 必须另外用插件 `PMX4UEAgentMCPTools.inspect_material_compile` 检查；图连通并不证明 shader 编译成功。最终以 Lit 外观和有必要的不同光照角度检查为主。Unlit/WorldNormal 非必要不拍；出现贴色或法线疑点时，通过 `diagnostic_captures` 定点补一张，不在全部相机、光照和候选之间重复采集。
 
-进入视觉阶段前完整阅读 [agent-material-workflow.md](../../../docs/agent-material-workflow.md)。使用审核的 `material_preview.example.json` 和 `material-preview` 阶段：自有新编辑器、隔离地图、相同视角/光照的材质 A/B、异步截图完成校验。不要调用旧 current-level setup，也不要因为会话缺少截图 MCP 工具而停止；插件公开方法可直接通过 UE Python 使用。无法出图则记录阻碍，不能以编译结果签收。
+进入视觉阶段前完整阅读 [agent-material-workflow.md](../../../docs/agent-material-workflow.md)。使用审核的 v3 `material_preview.example.json` 和 `material-preview` 阶段：自有可见编辑器直接加载安装的 Open World 日光地图，不复制或保存自定义预览地图；在相同视角/光照下做材质 A/B，等待角色实际贴图 mip 驻留后取实测视口 backbuffer 截图。不要调用旧 current-level setup，也不要因为会话缺少截图 MCP 工具而停止；插件公开方法可直接通过 UE Python 使用。离屏截图或仅有高分辨率 PNG 不作材质验收。必须在原尺寸打开全身与局部近景，模糊时按流程排查贴图、LOD、时域抗锯齿与取景；无法出清晰图则记录阻碍，不能以编译结果签收。
+
+默认在自有编辑器中直接加载 Open World 日光场景，不用偏暗的空关卡单灯作为主要验收。沿用默认太阳和场景/工程曝光，单 case 与多 case A/B 均允许 `exposure_ev100: null`，不要求独立校准报告。先确认环境与取景可用；仅在具体诊断或受控亮度测试需要时选择固定曝光，不反复调曝光作为启动门槛，也不要调材质发光补救错误照明。v1/v2 示例、旧 profile 迁移和环境加载限制见上述视觉闭环。
 
 逐项处理未分类贴图，记录纹理→槽→UV/通道证据；填写 `templates/material-review.md`，实际打开截图后才判断视觉。用户要求的效果即使属于可选功能，也要做隔离对照或明确列出缺口。没有动作不妨碍这些静态测试。
 
 ## 按需效果
+
+“按需”不代表默认不做：描边和边缘光都要在角色设计中有明确决策。完整阅读 [场景效果闭环](../../../docs/scene-effects-workflow.md)，使用主流水线的 scene-effects-build 构建选定候选，在自有日光预览实际挂载、截图比较，填写 delivery.scene_effects。用户要求的效果不能以 optional 为由省略；不适用时附模型证据和理由。
+
+脸部存在时先读 [脸部阴影执行流程](../../../docs/face-shading-workflow.md)。SDF 是算法选择，但脸部阴影不能无限期搁置：第一组基线图可用后开始，静态材质交付前完成真实贴图或验证替代方案。`face-sdf` 是运行时驱动接入，不生成贴图；烘焙和新数据检查工具的命令见该流程。交付 v2 的 `face_shading` 必填，不能将全白 Neutral 或关闭的开关当成效果实现。
 
 Face SDF、轮廓、丝袜/布料专用材质、头发高光按模型与目标选择，并非每个 PMX 都必须具备；但“可选”不能成为存在相关材质却不分析、不实现的理由。相关工具已复制到 `tools/legacy`，根据材质设计表选择、改写和验证：
 

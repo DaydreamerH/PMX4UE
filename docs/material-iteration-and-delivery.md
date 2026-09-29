@@ -8,7 +8,9 @@
 
 基线之后按差距安排局部实验，例如白丝边缘/高光、头发高光方向、眼睛分层、脸部阴影、轮廓距离变化。每轮记录：观察 → 假设 → 唯一主要变量 → 同条件对照 → 保留/放弃理由。证据支持不同算法时，agent 应改写图或脚本，不局限于调旧参数。
 
-截图失败时先做最小相机/灯光/单 case 诊断，保留日志；按照视觉闭环排查新编辑器、桥接口、渲染与异步输出。无画面可继续独立的数据审计或工具适配，但材质必须保持 `visual_pending/blocked`。不能把“等用户看”作为默认结束方式。
+脸部专项按 [face-shading-workflow.md](face-shading-workflow.md) 在基线后启动并在静态材质交付前收尾。其它缺资源目标也要写具体下一步及恢复条件；“pending”是当前状态，不能成为不再推进的结束条件。只有实际阻碍才保留未完成，允许继续独立工作；缺动画只阻止相应动态验收。
+
+截图失败时先做最小相机/灯光/单 case 诊断，保留日志；按照视觉闭环排查新编辑器、桥接口、日光地图是否加载、贴图 mip 驻留与实际画面。记录视口尺寸，但不以尺寸门槛判定清晰度。无画面可继续独立的数据审计或工具适配，但材质必须保持 `visual_pending/blocked`。不能把“等用户看”作为默认结束方式。
 
 ## 2. 每槽实际输入，不借用其它槽的默认纹理
 
@@ -57,16 +59,22 @@ python pmx4ue.py run --config "<材质实验工单>" --stage material-build --ex
 
 此入口核对网格槽数量/身份顺序，生成新父图/实例，**不重新导入 FBX，不给旧 mesh 写入材质**。构建报告给出 `component_overrides`（index/slot/material）；运行器保留源 mesh/显式复用纹理的磁盘哈希并检查未改动。随后执行同工单的 `ue-validate → material-compile`。
 
-预览 profile 的 `mesh` 使用精确的 `material_source_mesh`；Baseline 保持原网格材质，候选 case 从构建报告选取需要比较的组件级覆盖。新预览地图仍在本版本 namespace 下。`ue-validate` 在此模式检查新实例与输入，而不是声称旧 mesh 已切换新材质；报告标为 `unassigned_component_overrides`。最终采用哪些覆盖写入交接清单，用户授权后再接入正式角色组件。
+预览 profile 的 `mesh` 使用精确的 `material_source_mesh`；Baseline 保持原网格材质，候选 case 从构建报告选取需要比较的组件级覆盖。v3 在自有可见编辑器中直接加载安装的 Open World 日光地图，临时角色和覆盖只存在于内存，不另存自定义地图。`ue-validate` 在此模式检查新实例与输入，而不是声称旧 mesh 已切换新材质；报告标为 `unassigned_component_overrides`。最终采用哪些覆盖写入交接清单，用户授权后再接入正式角色组件。
 
 ## 5. 按资产组合与效果交付，不按“最新文件夹”交付
 
+补充必读 [重点材质效果与游戏验收](material-quality-contract.md)。旧 delivery.v2 需迁移新增 `material_review_contract=1`、三项 `material_features` 和明确的 `material_acceptance`。只覆盖槽名不再足够：眼睛层次、头发成束高光、袜边厚度感分别提供实现或有据决策，游戏可用性与静态图分开。默认曝光政策不变。
+
 从 `templates/delivery.example.json` 建立 `delivery.json`，工单 `pmx4ue.delivery_profile` 指向其绝对路径。模板有占位符和 pending，不能直接视为完成。
+
+当前为 `pmx4ue.delivery.v2`：旧 v1 需要补充 `face_shading` 决策及证据，不能只改版本号。SDF 路线检查真实纹理数据报告、实际绑定、通用图开关读回；替代算法也需专项看图。两者都要同一近景的正面/左侧/右侧光照证据。`runtime_status` 单列，静态脸部不能因缺动作而被省略，具体字段见脸部专项流程。
 
 - `assets` 明确选择 mesh/skeleton/材质/IK/PA/ABP/动画实际路径、文件 SHA256、证据引用和兼容性说明。材质可来自新版本、骨架和物理来自旧版，但必须说明组合关系。
 - `evidence` 用绝对路径和 SHA256 引用原始构建 run、新材质构建 run、当前 `ue_validation.json`、采集报告及审阅文档。保留基础 mesh 的导入警告，不让后续材质成功盖掉 `zero length normal` 等风险。
 - `effects` 覆盖验证报告中的全部槽，并对应材质设计表的目标，不只列成功的特征。实际看图后填写实现、观察、reviewer、images_opened 和截图哈希。默认要求同一报告、视角、光照、模式的 Baseline/候选对照。无需 A/B 的项目设 comparison_required=false 并填写 comparison_reason；不适用项目须证据及理由。
 - `dispositions` 处理每项自动降级/导入风险。`accepted_limitation` 要有原因、范围批准及证据；`alternative_verified` 引用已审阅替代效果。不能将仍关闭的功能写成已修复。
+
+目标图对照是可选的附加证据：有图时在审核记录中引用目标图与结果；无图不影响交付检查，但仍须有实际渲染截图和视觉审核。当前检查器不会自动分析目标图或判断相似度。
 
 ```powershell
 python pmx4ue.py run --config "<交付工单>" --stage delivery-check --execute

@@ -37,12 +37,18 @@ class WorkbenchTests(unittest.TestCase):
         self.assertTrue(spec["env"]["PMX4UE_SCRIPT"].endswith("ue_material_preflight.py"))
         self.assertFalse(self.a.exists())
 
-    def test_material_preview_owns_new_full_editor(self):
+    def test_material_preview_owns_new_visible_full_editor(self):
         spec = w.run(self.c, self.project, self.a, "material-preview")
         self.assertTrue(spec["argv"][0].endswith("UnrealEditor.exe"))
-        self.assertIn("-RenderOffscreen", spec["argv"])
+        # v3 visual evidence must come from a visible viewport, not offscreen capture.
+        self.assertNotIn("-RenderOffscreen", spec["argv"])
         self.assertIn("-PMX4UEPreview=" + spec["env"]["PMX4UE_PREVIEW_TOKEN"], spec["argv"])
         self.assertIn(str(self.a / "material_compile.json"), spec["inputs"])
+        self.assertFalse(self.a.exists())
+
+    def test_physics_performance_keeps_offscreen_launch(self):
+        spec = w.run(self.c, self.project, self.a, "performance")
+        self.assertIn("-RenderOffscreen", spec["argv"])
         self.assertFalse(self.a.exists())
 
     def test_added_stages_are_dry_and_explicit(self):
@@ -102,6 +108,23 @@ class WorkbenchTests(unittest.TestCase):
     def test_no_build_before_material_review(self):
         with self.assertRaisesRegex(ValueError, "material"):
             w.run(self.c, self.project, self.a, "ue-build")
+
+    def test_ik_execution_cannot_skip_skeleton_review(self):
+        w.write(Path(self.c["pmx4ue"]["rig_profile"]), {"reviewed": True})
+        with patch.object(w.subprocess, "run") as process:
+            with self.assertRaisesRegex(ValueError, "skeleton-audit"):
+                w.run(self.c, self.project, self.a, "ik", True)
+            process.assert_not_called()
+
+    def test_scene_effect_build_is_explicit_and_dry(self):
+        self.c["pmx4ue"]["material_reviewed"] = True
+        with self.assertRaisesRegex(ValueError, "Explicitly enable"):
+            w.run(self.c, self.project, self.a, "scene-effects-build")
+        self.c["features"]["outline"] = {"mode": "enabled"}
+        spec = w.run(self.c, self.project, self.a, "scene-effects-build")
+        self.assertTrue(spec["env"]["PMX4UE_SCRIPT"].endswith("ue_scene_effects.py"))
+        self.assertIn(str(self.a / "material_compile.json"), spec["inputs"])
+        self.assertFalse(self.a.exists())
 
     def test_independent_lock_and_cleanup(self):
         with w.project_lock(self.project):

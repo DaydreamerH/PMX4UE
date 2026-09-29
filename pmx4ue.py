@@ -20,11 +20,11 @@ LEGACY = ROOT / "tools/legacy"
 sys.path.insert(0, str(LEGACY))
 from mmd2ue_core import make_character_config, build_source_audit, build_material_map_draft
 
-STAGES = ("audit", "capabilities", "export", "skeleton-audit", "skeleton-plan", "skeleton-apply",
+STAGES = ("audit", "capabilities", "export", "skeleton-audit", "skeleton-review", "skeleton-plan", "skeleton-apply",
           "material-draft", "material-check", "ue-build", "ue-validate", "material-compile", "ik", "retarget-pose", "animation-export",
           "physics-inventory", "physics-inspect", "physics-plan", "physics-build",
           "physics-test", "performance")
-STAGES += ("face-sdf", "material-preview", "material-build", "material-preflight", "delivery-check")
+STAGES += ("face-sdf", "material-preview", "material-build", "material-preflight", "delivery-check", "scene-effects-build")
 
 
 def read(path):
@@ -81,10 +81,12 @@ def initialize(args):
                       ue_root=f"/Game/PMX4UE/{args.id}/{args.variant}")
     c["notes"] = ["Agent-owned work order; see PMX4UE/AGENTS.md. Source assets remain read-only."]
     c["features"] = {}  # Optional effects must be selected after material/UV review.
+    c["skeleton"] = dict(goal="clean_ue_fk", shoulder_strategy="branch_helpers", roles={})
     c["pmx4ue"] = dict(version=1, project=str(project), variant=args.variant,
                        blender=args.blender or "", engine=args.engine or "",
                        source_scale_reviewed=False, skeleton_policy="preserve",
                        skeleton_reviewed=False, material_reviewed=False,
+                       skeleton_decision=str(artifact / "skeleton_decision.json"),
                        rig_profile=str(dest.parent / "rig.json"),
                        retarget_pose_profile=str(dest.parent / "retarget_pose.json"),
                        animation_export_profile=str(dest.parent / "animation_export.json"),
@@ -157,12 +159,12 @@ def recipe(c, project, a, stage):
         return [p["blender"], "--background", *([str(blend)] if blend else []),
                 "--python-exit-code", "1", "--python", str(script), "--", *map(str, args)]
 
-    def ue(script, pie=False):
+    def ue(script, pie=False, visible=False):
         exe = Path(p["engine"]) / "Engine/Binaries/Win64" / ("UnrealEditor.exe" if pie else "UnrealEditor-Cmd.exe")
         env.update(PMX4UE_SCRIPT=str(script), PMX4UE_CONFIG=str(config), PMX4UE_STAGE=stage,
                    MMD2UE_CHARACTER_CONFIG=str(config), MMD2UE_BUILD_MODE="build", MMD2UE_ASSET_VARIANT="")
         flag = "-ExecutePythonScript=" if pie else "-script="
-        return [str(exe), str(project), *(["/Engine/Maps/Templates/Template_Default", "-RenderOffscreen",
+        return [str(exe), str(project), *(["/Engine/Maps/Templates/Template_Default", *([] if visible else ["-RenderOffscreen"]),
                 "-ini:EditorSettings:[/Script/UnrealEd.EditorPerformanceSettings]:bThrottleCPUWhenNotForeground=False"] if pie else ["-run=pythonscript"]),
                 flag + str(ROOT / "tools/ue_entry.py"), "-unattended", "-nop4", "-nosplash"]
 
@@ -182,7 +184,7 @@ def recipe(c, project, a, stage):
         inputs = [Path(p["material_preview_profile"]), a / "material_compile.json"]
         token = uuid.uuid4().hex
         env.update(PMX4UE_PREVIEW_PROFILE=str(inputs[0]), PMX4UE_OUTPUT=str(out), PMX4UE_PREVIEW_TOKEN=token)
-        argv = ue(ROOT / "tools/ue_material_preview.py", pie=True) + ["-PMX4UEPreview=" + token]
+        argv = ue(ROOT / "tools/ue_material_preview.py", pie=True, visible=True) + ["-PMX4UEPreview=" + token]
     elif stage == "face-sdf":
         require(p.get("face_sdf_profile"), "Set face_sdf_profile after face-axis review")
         inputs = [Path(p["face_sdf_profile"])]
@@ -212,6 +214,10 @@ def recipe(c, project, a, stage):
     elif stage == "skeleton-audit":
         inputs = [base_blend]
         argv = blender(LEGACY / "blender_skeleton_audit.py", out, blend=base_blend)
+    elif stage == "skeleton-review":
+        require(c.get("skeleton", {}).get("roles"), "Map actual torso/left/right upper-limb roles first")
+        inputs = [a / "skeleton_audit.json"]
+        argv = py("skeleton_review.py", "--audit", inputs[0], "--config", config, "--output", out)
     elif stage in ("skeleton-plan", "skeleton-apply"):
         require(p.get("skeleton_reviewed") is True and p["skeleton_policy"] == "upper-only", "Review an upper-only skeleton plan, or use preserve")
         require(c.get("skeleton", {}).get("roles"), "Explicit reviewed left/right roles required")
@@ -231,6 +237,13 @@ def recipe(c, project, a, stage):
         inputs = [Path(c["paths"]["material_map"]), a / "blender_manifest.json"]
         outputs = []
         argv = [sys.executable, str(LEGACY / "mmd2ue.py"), "--project-root", str(project.parent), "check-map", "--config", str(config)]
+    elif stage == "scene-effects-build":
+        require(p.get("material_reviewed") is True, "Review materials before scene effects")
+        require(any((c.get("features", {}).get(k) or {}).get("mode") == "enabled" for k in ("outline", "depth_rim")),
+                "Explicitly enable at least one reviewed outline/depth_rim candidate")
+        inputs = [Path(c["paths"]["material_map"]), a / "blender_manifest.json", a / "material_compile.json"]
+        env.update(PMX4UE_OUTPUT=str(out))
+        argv = ue(ROOT / "tools/ue_scene_effects.py") + ["-AllowCommandletRendering"]
     elif stage in ("ue-build", "material-build", "ue-validate"):
         require(p.get("material_reviewed") is True, "Agent must review material slots/textures first")
         require(p["skeleton_policy"] in ("preserve", "upper-only"), "Unsupported skeleton policy; extend adapter explicitly")
@@ -283,9 +296,18 @@ def run(c, project, a, stage, execute=False, timeout=1800):
         return spec
     require(all(Path(f).is_file() for f in spec["inputs"]), "Missing stage inputs: " + str(spec["inputs"]))
     require(not any(Path(f).exists() for f in spec["outputs"]), "Outputs exist; inspect them or choose a new variant, no silent overwrite")
+    if stage in {"ue-build", "ik", "retarget-pose", "physics-build", "physics-test", "performance"}:
+        from tools.skeleton_gate import verify, verify_import
+        spec["inputs"] += verify(c, a)
+        if stage != "ue-build":
+            spec["inputs"] += verify_import(c, a, stage)
+    if stage == "scene-effects-build":
+        require(read(a / "material_compile.json").get("status") == "compiled_visual_pending",
+                "Compile baseline materials before scene-effect candidates")
     if stage == "material-preview":
-        from tools.material_preview_contract import validate
-        validate(read(spec["inputs"][0]), c["paths"]["ue_root"], c["pmx4ue"].get("material_source_mesh"))
+        from tools.material_preview_contract import validate, verify_environment_review
+        preview = validate(read(spec["inputs"][0]), c["paths"]["ue_root"], c["pmx4ue"].get("material_source_mesh"))
+        spec["inputs"] += verify_environment_review(preview)
         require(read(spec["inputs"][1]).get("status") == "compiled_visual_pending", "Complete material-compile before preview")
     with project_lock(project):
         a.mkdir(parents=True, exist_ok=True)
@@ -321,7 +343,8 @@ def run(c, project, a, stage, execute=False, timeout=1800):
                 with log.open("w", encoding="utf-8") as stream:
                     result = subprocess.run(spec["argv"], env={**os.environ, **spec["env"]},
                                             cwd=ROOT, stdout=stream, stderr=subprocess.STDOUT, timeout=timeout,
-                                            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                                            creationflags=(0 if stage == "material-preview" else
+                                                           getattr(subprocess, "CREATE_NO_WINDOW", 0)))
                 record["process_exit_code"] = result.returncode
                 require(result.returncode == 0, f"Process exited {result.returncode}; see {log}")
                 text = log.read_text(encoding="utf-8", errors="replace")

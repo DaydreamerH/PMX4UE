@@ -67,6 +67,9 @@ def main():
         mesh = unreal.load_asset(plan["mesh"])
         if not mesh or (not rest_only and (not animation or animation.get_editor_property("skeleton") != mesh.get_editor_property("skeleton"))):
             raise RuntimeError("Animation/mesh skeleton mismatch or missing asset")
+        from ue_skeleton_guard import guard
+        config = json.loads(Path(os.environ["PMX4UE_CONFIG"]).read_text(encoding="utf-8-sig"))
+        guard(config, mesh, "physics-build" if stage == "build" else "physics-test")
         inspection = checked(api.inspect_physics_mesh(plan["mesh"]))
         if digest(inspection) != plan["mesh_inspection_sha256"]:
             raise RuntimeError("Target mesh inspection changed; regenerate plan")

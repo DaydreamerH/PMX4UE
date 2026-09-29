@@ -1,0 +1,9 @@
+{
+  "schema": "pmx4ue.skeleton-decision.v1",
+  "reviewed": false,
+  "audit_sha256": "REPLACE_FROM_skeleton_audit.json",
+  "source_blend_sha256": "REPLACE_FROM_AUDITED_BLEND",
+  "roles": {},
+  "arms": {"action": "pending", "reason": "For clean_ue_fk optimize intermediate main paths; retain weighted twists as branches, not as a reason for blanket preserve", "preservation_evidence": []},
+  "shoulders": {"action": "pending", "reason": "Prefer branch_helpers for UE FK: shoulder and arm are direct, P/C remain off the main path; delete only as a separately justified reduction", "preservation_evidence": [], "helper_decisions": {}}
+}

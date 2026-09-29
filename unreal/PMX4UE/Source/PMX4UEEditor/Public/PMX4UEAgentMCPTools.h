@@ -68,4 +68,15 @@ public:
 	/** Schedules a high-resolution screenshot of the active editor viewport and returns the absolute output path. */
 	UFUNCTION(BlueprintCallable, Category = "PMX4UE|MCP")
 	static FString CaptureEditorViewport(const FString& OutputFilename = "PMX4UE_MCP.png", int32 Width = 1200, int32 Height = 1200);
+
+	UFUNCTION(BlueprintCallable, Category = "PMX4UE|Agent")
+	static FString CaptureVisibleEditorViewport(const FString& OutputFilename = "PMX4UE_Visible.png", const FString& ActorLabel = "", const FString& CameraJson = "");
+
+	/** Auto-frame or inspect the explicit subject in the same visible viewport used for capture. */
+	UFUNCTION(BlueprintCallable, Category = "PMX4UE|Preview")
+	static FString FramePreviewSubject(const FString& ActorLabel, const FString& CameraJson, bool bApply = false);
+
+	/** Requests full mips for the preview actor's used /Game textures and reports actual residency. */
+	UFUNCTION(BlueprintCallable, Category = "PMX4UE|Agent")
+	static FString CheckPreviewTextureResidency(const FString& ActorLabel, float HoldSeconds = 60.0f);
 };

@@ -1,11 +1,10 @@
 """Owned full-editor material capture. Never execute in the user's open editor.
 
 Entry: pmx4ue.py material-preview. No animation required. Source assets are
-read-only; only the new baseline preview map is saved. A/B overrides live on
-the preview component and are discarded when this owned process quits.
+read-only. v3 loads the installed daylight map without saving it; legacy v1/v2
+must migrate before execution. A/B overrides are discarded on process exit.
 """
 import hashlib
-import itertools
 import json
 import os
 from pathlib import Path
@@ -13,9 +12,11 @@ import re
 import time
 import traceback
 import unreal
+from outline_contract import outline_spec, outline_assets, outline_args, verify_outline_receipt
 
-from material_preview_contract import validate, png_evidence, require
+from material_preview_contract import validate, capture_jobs, png_evidence, require, verify_environment_review, CapturePixelsError
 from ue_bridge import resolve, checked
+from preview_framing import camera_spec, verify_framing
 
 
 def read(path):
@@ -42,6 +43,7 @@ class Preview:
         command_line = unreal.SystemLibrary.get_command_line()
         require(re.fullmatch(r"[a-f0-9]{32}", token) and
                 ("-PMX4UEPreview=" + token) in command_line, "Not an owned material-preview process")
+        require("-RenderOffscreen" not in command_line, "Material review requires a visible editor viewport")
         self.owned = True
         self.editor = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem)
         self.level = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
@@ -51,13 +53,17 @@ class Preview:
         config = read(os.environ["PMX4UE_CONFIG"])
         profile_path = Path(os.environ["PMX4UE_PREVIEW_PROFILE"])
         self.p = validate(read(profile_path), config["paths"]["ue_root"], config["pmx4ue"].get("material_source_mesh"))
+        require(self.p["schema"] == "pmx4ue.material-preview.v3", "Migrate legacy preview to v3 subject-aware framing before execution")
+        verify_environment_review(self.p)
         compile_report = read(Path(config["paths"]["artifact_dir"]) / "material_compile.json")
         require(compile_report.get("status") == "compiled_visual_pending", "Material compile gate not complete")
         self.project = Path(unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir())).resolve()
         require(self.project == Path(config["pmx4ue"]["project"]).resolve().parent, "Wrong project")
         self.api = resolve("visual")
         self.native_capture_dir = "MMD2UECaptures" if self.api.__name__.startswith("MMD2UE") else "PMX4UECaptures"
-        for method in ("capture_editor_viewport", "set_viewport_view_mode", "inspect_material_compile",
+        for method in ("capture_visible_editor_viewport", "check_preview_texture_residency",
+                       "frame_preview_subject",
+                       "set_viewport_view_mode", "inspect_material_compile",
                        "set_character_outline_overlay", "set_character_depth_rim"):
             require(callable(getattr(self.api, method, None)), "Missing native Python method: " + method)
         self.mesh = unreal.load_asset(self.p["mesh"])
@@ -70,10 +76,18 @@ class Preview:
                 require(row["index"] < len(self.materials), "Slot outside mesh")
                 if row.get("material"):
                     assets.append(row["material"])
-            assets += [case[k] for k in ("outline", "depth_rim") if k in case]
+            if "outline" in case:
+                outline_spec(case["outline"], len(self.materials))
+                assets += outline_assets(case["outline"])
+            if "depth_rim" in case:
+                assets.append(case["depth_rim"])
         if any("depth_rim" in c for c in self.p["cases"]):
+            original = unreal.SystemLibrary.get_console_variable_int_value("r.CustomDepth")
+            # This fresh process is owned by the preview; never save project settings.
+            unreal.SystemLibrary.execute_console_command(self.editor.get_editor_world(), "r.CustomDepth 3")
             require(unreal.SystemLibrary.get_console_variable_int_value("r.CustomDepth") == 3,
-                    "Depth rim requires stencil (r.CustomDepth=3); review project settings separately")
+                    "Could not enable stencil in the owned preview process; inspect API before continuing")
+            self.report["custom_depth"] = dict(initial=original, preview=3, persistent_config_modified=False)
         # Compile actual baseline AND variant parents now; do not trust an older report alone.
         self.report["compile"] = {}
         for path in sorted(set(assets[1:])):
@@ -92,38 +106,54 @@ class Preview:
         self.report.update(schema="pmx4ue.material-captures.v1", profile=self.p,
                            profile_sha256=hashlib.sha256(profile_path.read_bytes()).hexdigest(),
                            engine=unreal.SystemLibrary.get_engine_version(), provider=self.api.__name__,
-                           rendering="owned_offscreen_editor", input_assets=self.inputs,
+                           rendering="owned_visible_editor_viewport", input_assets=self.inputs,
                            scope="Static material review only; no animation, physics or runtime SDF acceptance")
-        require(not unreal.EditorAssetLibrary.does_asset_exist(self.p["level"]), "Preview map already exists")
-        require(not (self.project / "Content" / (self.p["level"][len('/Game/'):] + ".umap")).exists(), "Preview map file exists")
-        # No actor removal and no SaveDirtyPackages. new_level only in this owned template process.
-        require(self.level.new_level(self.p["level"]), "Could not create isolated preview level")
+        # v3 reviews the installed daylight map itself, only in this owned
+        # process. No copied custom level and no save of the Engine template.
+        self.daylight = self.p["schema"] in ("pmx4ue.material-preview.v2", "pmx4ue.material-preview.v3")
+        self.direct_daylight = self.p["schema"] == "pmx4ue.material-preview.v3"
+        if self.direct_daylight:
+            template = self.p["environment"]["template"]
+            self.daylight_file = Path(config["pmx4ue"]["engine"]) / "Engine/Content/Maps/Templates/OpenWorld.umap"
+            require(self.daylight_file.is_file(), "Open World daylight map file is unavailable")
+            self.daylight_sha256 = hashlib.sha256(self.daylight_file.read_bytes()).hexdigest()
+            require(unreal.EditorAssetLibrary.does_asset_exist(template), "Open World daylight map is unavailable")
+            require(self.level.load_level(template), "Could not load Open World daylight map")
+            expected_world = template
+            self.report["daylight_map"] = dict(path=template, source_sha256=self.daylight_sha256,
+                                               saved_by_preview=False)
+        else:
+            require(not unreal.EditorAssetLibrary.does_asset_exist(self.p["level"]), "Preview map already exists")
+            require(not (self.project / "Content" / (self.p["level"][len('/Game/'):] + ".umap")).exists(), "Preview map file exists")
+        if self.daylight and not self.direct_daylight:
+            template = self.p["environment"]["template"]
+            require(unreal.EditorAssetLibrary.does_asset_exist(template), "Open World template unavailable; no empty-map fallback")
+            require(self.level.new_level_from_template(self.p["level"], template), "Could not copy Open World template")
+            expected_world = self.p["level"]
+        elif not self.daylight:
+            unreal.log_warning("Legacy v1 single-light preview: migrate to v2 Open World daylight for material review")
+            require(self.level.new_level(self.p["level"]), "Could not create isolated preview level")
+            expected_world = self.p["level"]
         world = self.editor.get_editor_world()
-        require(world.get_path_name().split('.')[0] == self.p["level"], "Wrong isolated world")
+        require(world.get_path_name().split('.')[0] == expected_world, "Wrong daylight/editor world")
+        # Record the actual render setting with each capture; do not change it
+        # to mask a texture-streaming or mip-residency problem.
         self.actor = self.spawn(unreal.SkeletalMeshActor, "PMX4UE_MaterialReview")
+        if self.daylight:
+            self.actor.set_actor_location(unreal.Vector(*self.p["environment"]["model_location"]), False, False)
         self.body = self.actor.get_editor_property("skeletal_mesh_component")
         self.body.set_skeletal_mesh_asset(self.mesh)
         self.body.set_update_animation_in_editor(False)
         self.camera = self.spawn(unreal.CameraActor, "PMX4UE_ReviewCamera")
-        self.light = self.spawn(unreal.DirectionalLight, "PMX4UE_ReviewKey")
-        self.light_component = self.light.get_component_by_class(unreal.DirectionalLightComponent)
-        self.light_component.set_mobility(unreal.ComponentMobility.MOVABLE)
-        # Existing stylized graphs query atmosphere light 0; a generic lamp
-        # without this registration would not exercise their authored lobes.
-        self.light_component.set_editor_property("atmosphere_sun_light", True)
-        self.light_component.set_editor_property("atmosphere_sun_light_index", 0)
-        post = self.spawn(unreal.PostProcessVolume, "PMX4UE_ReviewExposure")
-        post.set_editor_property("unbound", True)
-        require(unreal.SystemLibrary.get_console_variable_int_value("r.DefaultFeature.AutoExposure.ExtendDefaultLuminanceRange") == 1,
-                "EV100 profile requires extended luminance range; adapt exposure API explicitly, do not change project defaults")
-        settings = post.get_editor_property("settings")
-        for name, value in {"override_auto_exposure_min_brightness": True, "override_auto_exposure_max_brightness": True,
-                            "auto_exposure_min_brightness": self.p["exposure_ev100"],
-                            "auto_exposure_max_brightness": self.p["exposure_ev100"],
-                            "override_auto_exposure_bias": True, "auto_exposure_bias": 0.0}.items():
-            settings.set_editor_property(name, value)
-        post.set_editor_property("settings", settings)
-        self.jobs = list(itertools.product(self.p["cases"], self.p["cameras"], self.p["lights"], self.p["modes"]))
+        self.setup_lighting()
+        if self.p["exposure_ev100"] is not None:
+            self.setup_fixed_exposure()
+        self.report["environment"]["exposure"] = {
+            "mode": "fixed_ev100" if self.p["exposure_ev100"] is not None else "template_project_defaults",
+            "ev100": self.p["exposure_ev100"],
+            "note": "Template/project exposure is allowed for Baseline and A/B. Auto exposure may adapt; matching policy does not guarantee identical effective exposure. No project settings changed."
+        }
+        self.jobs = capture_jobs(self.p)
         self.report["expected_captures"] = len(self.jobs)
         self.index, self.previous_case, self.phase = 0, None, "prepare"
         self.token = token
@@ -133,6 +163,57 @@ class Preview:
         unreal.AutomationUtilsBlueprintLibrary.finish_all_asset_compilation()
         unreal.EditorPythonScripting.set_keep_python_script_alive(True)
         self.callback = unreal.register_slate_post_tick_callback(self.tick)
+
+    def setup_lighting(self):
+        self.sky_components = []
+        if self.daylight:
+            actors = unreal.get_editor_subsystem(unreal.EditorActorSubsystem).get_all_level_actors()
+            suns = []
+            for actor in actors:
+                light = actor.get_component_by_class(unreal.DirectionalLightComponent)
+                if light and light.get_editor_property("atmosphere_sun_light") and light.get_editor_property("atmosphere_sun_light_index") == 0:
+                    suns.append((actor, light))
+                sky = actor.get_component_by_class(unreal.SkyLightComponent)
+                if sky:
+                    self.sky_components.append(sky)
+            require(len(suns) == 1 and self.sky_components and
+                    any(isinstance(a, unreal.SkyAtmosphere) for a in actors),
+                    "Open World lighting not loaded/unambiguous; inspect template/World Partition, do not substitute a single lamp")
+            require(any(isinstance(a, unreal.LandscapeProxy) for a in actors),
+                    "Open World landscape not loaded; load the preview region explicitly before capture")
+            self.light, self.light_component = suns[0]
+            require(self.light_component.get_editor_property("intensity") > 0 and
+                    all(s.get_editor_property("intensity") > 0 for s in self.sky_components), "Inactive daylight illumination")
+            self.report["environment"] = dict(
+                template=self.p["environment"]["template"], model_location=self.p["environment"]["model_location"],
+                sun=self.light.get_path_name(), sky_lights=[s.get_path_name() for s in self.sky_components],
+                sky_intensities=[float(s.get_editor_property("intensity")) for s in self.sky_components],
+                loaded_actors=[dict(path=a.get_path_name(), label=a.get_actor_label()) for a in actors])
+        else:
+            self.light = self.spawn(unreal.DirectionalLight, "PMX4UE_ReviewKey")
+            self.light_component = self.light.get_component_by_class(unreal.DirectionalLightComponent)
+            self.light_component.set_mobility(unreal.ComponentMobility.MOVABLE)
+            self.light_component.set_editor_property("atmosphere_sun_light", True)
+            self.light_component.set_editor_property("atmosphere_sun_light_index", 0)
+            self.report["environment"] = {"mode": "legacy_single_light"}
+        self.sun_rotation = self.light.get_actor_rotation()
+        self.sun_intensity = float(self.light_component.get_editor_property("intensity"))
+        self.report["environment"]["initial_sun"] = dict(pitch=self.sun_rotation.pitch, yaw=self.sun_rotation.yaw,
+                                                         roll=self.sun_rotation.roll, intensity=self.sun_intensity)
+
+    def setup_fixed_exposure(self):
+        post = self.spawn(unreal.PostProcessVolume, "PMX4UE_ReviewExposure")
+        post.set_editor_property("unbound", True)
+        post.set_editor_property("priority", 10000.)
+        require(unreal.SystemLibrary.get_console_variable_int_value("r.DefaultFeature.AutoExposure.ExtendDefaultLuminanceRange") == 1,
+                "EV100 profile requires extended luminance range; adapt exposure API explicitly, do not change project defaults")
+        settings = post.get_editor_property("settings")
+        for name, value in {"override_auto_exposure_min_brightness": True, "override_auto_exposure_max_brightness": True,
+                            "auto_exposure_min_brightness": self.p["exposure_ev100"],
+                            "auto_exposure_max_brightness": self.p["exposure_ev100"],
+                            "override_auto_exposure_bias": True, "auto_exposure_bias": 0.0}.items():
+            settings.set_editor_property(name, value)
+        post.set_editor_property("settings", settings)
 
     def dependencies(self, paths):
         registry = unreal.AssetRegistryHelpers.get_asset_registry()
@@ -164,16 +245,20 @@ class Preview:
         actor.set_actor_label(label)
         return actor
 
-    def outline(self, path, excluded=""):
-        native(self.api.set_character_outline_overlay(self.actor.get_actor_label(), path, "", "", excluded, "", "", 6000., False))
+    def outline(self, spec, clear=False):
+        result = native(self.api.set_character_outline_overlay(
+            self.actor.get_actor_label(), *outline_args(spec, len(self.materials), clear)))
+        verify_outline_receipt(spec, result, len(self.materials), clear)
+        result["requested_routing"] = outline_spec(spec, len(self.materials))
+        return result
 
     def rim(self, path, weight):
-        native(self.api.set_character_depth_rim(self.actor.get_actor_label(), path, 1, weight, False))
+        return native(self.api.set_character_depth_rim(self.actor.get_actor_label(), path, 1, weight, False))
 
     def apply_case(self, case):
         if self.previous_case:
             if "outline" in self.previous_case:
-                self.outline(self.previous_case["outline"], ",".join(map(str, range(len(self.materials)))))
+                self.outline(self.previous_case["outline"], clear=True)
             if "depth_rim" in self.previous_case:
                 self.rim(self.previous_case["depth_rim"], 0.)
         self.mids = []
@@ -190,10 +275,11 @@ class Preview:
                 self.mids.append(mid)
                 for name, value in row["scalars"].items():
                     mid.set_scalar_parameter_value(name, float(value))
+        self.applied_effects = {}
         if "outline" in case:
-            self.outline(case["outline"])
+            self.applied_effects["outline"] = self.outline(case["outline"])
         if "depth_rim" in case:
-            self.rim(case["depth_rim"], 1.)
+            self.applied_effects["depth_rim"] = self.rim(case["depth_rim"], 1.)
         self.previous_case = case
 
     def tick(self, _delta):
@@ -207,36 +293,74 @@ class Preview:
                 case, camera, light, mode = self.jobs[self.index]
                 if case != self.previous_case:
                     self.apply_case(case)
-                self.light.set_actor_rotation(unreal.Rotator(light["pitch"], light["yaw"], 0.), False)
-                self.light_component.set_intensity(light["intensity"])
-                aligned = native(self.api.align_viewport_to_camera(self.camera.get_actor_label(), camera["azimuth"],
-                                 camera["distance"], camera["height"], camera["fov"], self.actor.get_actor_label()))
+                rotation = (unreal.Rotator(pitch=light.get("pitch", self.sun_rotation.pitch),
+                            yaw=self.sun_rotation.yaw + light.get("yaw_offset", 0.), roll=self.sun_rotation.roll)
+                            if self.daylight else unreal.Rotator(pitch=light["pitch"], yaw=light["yaw"], roll=0.))
+                self.light.set_actor_rotation(rotation, False)
+                self.light_component.set_intensity(light.get("intensity", self.sun_intensity))
+                for sky in self.sky_components:
+                    sky.recapture_sky()
+                require(self.direct_daylight, "Subject-aware screenshots require a migrated v3 profile")
+                self.camera_json = json.dumps(camera_spec(camera))
+                aligned = native(self.api.frame_preview_subject(self.actor.get_actor_label(), self.camera_json, True))
                 native(self.api.set_viewport_view_mode(mode))
                 unreal.AutomationUtilsBlueprintLibrary.finish_all_asset_compilation()
-                # Save only a reusable baseline map, before any experimental overrides.
-                if self.index == 0:
+                # Never save the Engine daylight template. Legacy copied-map
+                # profiles retain their old baseline-only behavior.
+                if self.index == 0 and not self.direct_daylight:
                     require(self.level.save_current_level(), "Could not save baseline preview map")
-                self.row = dict(case=case["name"], camera=camera, light=light, mode=mode, aligned=aligned)
+                actual_rotation = self.light.get_actor_rotation()
+                require(all(abs((getattr(actual_rotation, axis) - getattr(rotation, axis) + 180.) % 360. - 180.) < .1
+                            for axis in ("pitch", "yaw", "roll")), "Sun rotation readback differs from requested rotation")
+                self.row = dict(case=case["name"], camera=camera, light=light, mode=mode, aligned=aligned,
+                                scene_effects=self.applied_effects,
+                                actual_sun=dict(pitch=actual_rotation.pitch, yaw=actual_rotation.yaw,
+                                                roll=actual_rotation.roll, intensity=float(self.light_component.get_editor_property("intensity"))))
                 self.phase, self.since = "warmup", time.monotonic()
-            elif self.phase == "warmup" and now-self.since >= self.p["warmup_seconds"]:
-                name = f"PMX4UE_{self.token}_{self.index:04d}.png"
-                response = native(self.api.capture_editor_viewport(name, self.p["width"], self.p["height"]))
-                self.pending = Path(unreal.Paths.convert_relative_path_to_full(response["output_path"])).resolve()
-                require(self.pending.parent == (self.project / "Saved" / self.native_capture_dir).resolve() and self.pending.name == name,
-                        "Unexpected capture output path")
-                self.capture_error = "Screenshot file not yet observed"
-                self.phase, self.since = "capture", now
+            elif self.phase == "warmup":
+                residency = native(self.api.check_preview_texture_residency(self.actor.get_actor_label(), 60.0))
+                self.row["texture_residency"] = residency
+                require(now-self.since < 60,
+                        f"Character textures did not finish loading: {residency['pending']} pending; inspect texture paths/mips")
+                if now-self.since >= self.p["warmup_seconds"] and residency["ready"]:
+                    name = f"PMX4UE_{self.token}_{self.index:04d}.png"
+                    response = json.loads(self.api.capture_visible_editor_viewport(name, self.actor.get_actor_label(), self.camera_json))
+                    # A viewport resize/camera transition can invalidate the fit during warmup.
+                    # Retry only a geometric framing failure, never missing/hidden subjects.
+                    if response.get("ok") is False and response.get("schema") == "pmx4ue.subject-frame.v1":
+                        retries = self.row.setdefault("framing_retries", [])
+                        require(len(retries) < 2, "Viewport framing kept changing; stop interaction and rerun: " + str(response))
+                        retries.append(response)
+                        self.row["aligned"] = native(self.api.frame_preview_subject(self.actor.get_actor_label(), self.camera_json, True))
+                        self.since = time.monotonic()
+                        return
+                    require(response.get("ok") is True, "Native capture failed: " + str(response))
+                    require(response.get("source") == "visible_viewport_backbuffer", "Unexpected screenshot source")
+                    width, height = response["width"], response["height"]
+                    self.row.update(capture_source=response["source"], viewport_width=width, viewport_height=height,
+                                    alpha_policy=response.get("alpha_policy", "legacy_unreported"),
+                                    r_screen_percentage_setting=response["r_screen_percentage_setting"])
+                    self.row["framing"] = response["framing"]
+                    verify_framing(self.row, self.p["mesh"])
+                    self.pending = Path(unreal.Paths.convert_relative_path_to_full(response["output_path"])).resolve()
+                    require(self.pending.parent == (self.project / "Saved" / self.native_capture_dir).resolve() and self.pending.name == name,
+                            "Unexpected capture output path")
+                    self.capture_error = "Screenshot file not yet observed"
+                    self.phase, self.since = "capture", now
             elif self.phase == "capture":
                 require(now-self.since < 60, f"Screenshot did not finish within 60 seconds: {self.pending}: {self.capture_error}")
                 try:
-                    png_evidence(self.pending, self.p["width"], self.p["height"])
+                    png_evidence(self.pending, self.row["viewport_width"], self.row["viewport_height"])
+                except CapturePixelsError as error:
+                    self.report["invalid_capture"] = {"path": str(self.pending), "error": str(error)}
+                    raise  # A complete PNG with broken alpha/encoding will not improve by waiting.
                 except (OSError, ValueError) as error:
                     self.capture_error = str(error)
-                    return  # HighResShot is asynchronous; partial file is not completion.
+                    return  # Preserve polling for filesystem/PNG completion.
                 destination = self.captures_dir / self.pending.name
                 with destination.open("xb") as stream:
                     stream.write(self.pending.read_bytes())
-                self.row["image"] = png_evidence(destination, self.p["width"], self.p["height"])
+                self.row["image"] = png_evidence(destination, self.row["viewport_width"], self.row["viewport_height"])
                 self.report["captures"].append(self.row)
                 self.persist()
                 self.index += 1
@@ -262,6 +386,16 @@ class Preview:
                                 for p, value in self.inputs["game_package_sha256"].items())
         except OSError:
             error = (error or "") + traceback.format_exc()
+        if hasattr(self, "daylight_file"):
+            try:
+                daylight_unchanged = (self.daylight_file.is_file() and
+                                      hashlib.sha256(self.daylight_file.read_bytes()).hexdigest() == self.daylight_sha256)
+            except OSError:
+                daylight_unchanged = False
+                error = (error or "") + traceback.format_exc()
+            self.report.setdefault("daylight_map", {})["source_unchanged"] = daylight_unchanged
+            if not daylight_unchanged:
+                error = (error or "") + " Open World source map changed during preview"
         self.report.update(status="failed" if error or not unchanged else "captured_visual_pending",
                            input_assets_unchanged=unchanged, visual_accepted=False)
         if error:

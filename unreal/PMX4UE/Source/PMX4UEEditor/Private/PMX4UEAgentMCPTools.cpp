@@ -3,17 +3,22 @@
 #include "PMX4UEAgentMCPTools.h"
 
 #include "Editor.h"
+#include "SceneView.h"
 #include "AssetCompilingManager.h"
 #include "Camera/CameraActor.h"
 #include "EditorAssetLibrary.h"
 #include "LevelEditorViewport.h"
 #include "Animation/SkeletalMeshActor.h"
 #include "Engine/SkeletalMesh.h"
+#include "Engine/Texture2D.h"
 #include "Engine/DirectionalLight.h"
 #include "Engine/PostProcessVolume.h"
 #include "EngineUtils.h"
 #include "FileHelpers.h"
 #include "HighResScreenshot.h"
+#include "ImageUtils.h"
+#include "Misc/FileHelper.h"
+#include "HAL/IConsoleManager.h"
 #include "JsonObjectConverter.h"
 #include "MaterialEditingLibrary.h"
 #include "MaterialShared.h"
@@ -278,7 +283,7 @@ FString UPMX4UEAgentMCPTools::SetViewportViewMode(const FString& ViewMode)
 	FLevelEditorViewportClient* TargetViewport = nullptr;
 	for (FLevelEditorViewportClient* ViewportClient : GEditor->GetLevelViewportClients())
 	{
-		if (ViewportClient && ViewportClient->IsPerspective())
+		if (ViewportClient && ViewportClient->IsPerspective() && ViewportClient->IsVisible() && ViewportClient->Viewport)
 		{
 			TargetViewport = ViewportClient;
 			break;
@@ -770,5 +775,302 @@ FString UPMX4UEAgentMCPTools::CaptureEditorViewport(const FString& OutputFilenam
 	Result->SetBoolField(TEXT("ok"), true);
 	Result->SetStringField(TEXT("status"), TEXT("scheduled"));
 	Result->SetStringField(TEXT("output_path"), OutputPath);
+	return JsonString(Result);
+}
+
+FString UPMX4UEAgentMCPTools::FramePreviewSubject(const FString& ActorLabel, const FString& CameraJson, bool bApply)
+{
+	if (!GEditor || ActorLabel.IsEmpty())
+		return JsonString(ErrorObject(TEXT("Preview actor label and editor are required")));
+	UWorld* World = GEditor->GetEditorWorldContext().World();
+	if (!World) return JsonString(ErrorObject(TEXT("No editor world")));
+	USkeletalMeshComponent* Mesh = nullptr;
+	AActor* Subject = nullptr;
+	for (TActorIterator<AActor> It(World); It; ++It)
+	{
+		if (It->GetActorLabel() == ActorLabel)
+		{
+			if (Subject) return JsonString(ErrorObject(TEXT("Ambiguous preview actor label")));
+			Subject = *It;
+			Mesh = It->FindComponentByClass<USkeletalMeshComponent>();
+		}
+	}
+	if (!Subject || !Mesh || !Mesh->GetSkeletalMeshAsset() || !Mesh->IsRegistered())
+		return JsonString(ErrorObject(TEXT("Preview subject mesh is unavailable")));
+	if (Subject->IsHidden() || Subject->IsHiddenEd() || !Mesh->IsVisible() || Mesh->bHiddenInGame)
+		return JsonString(ErrorObject(TEXT("Preview subject is hidden; refusing empty-scene capture")));
+	FLevelEditorViewportClient* Target = nullptr;
+	for (FLevelEditorViewportClient* Client : GEditor->GetLevelViewportClients())
+		if (Client && Client->IsPerspective() && Client->IsVisible() && Client->Viewport)
+		{ Target = Client; break; }
+	if (!Target) return JsonString(ErrorObject(TEXT("No visible perspective viewport")));
+	const FIntPoint Size = Target->Viewport->GetSizeXY();
+	if (Size.X <= 0 || Size.Y <= 0) return JsonString(ErrorObject(TEXT("Viewport has no drawable pixels")));
+	TSharedPtr<FJsonObject> Spec;
+	if (!FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(CameraJson), Spec) || !Spec.IsValid())
+		return JsonString(ErrorObject(TEXT("Invalid camera JSON")));
+	FString Kind;
+	double Azimuth = 0, Elevation = 0, Fov = 0, Margin = 0;
+	if (!Spec->TryGetStringField(TEXT("kind"), Kind) ||
+		!Spec->TryGetNumberField(TEXT("azimuth"), Azimuth) ||
+		!Spec->TryGetNumberField(TEXT("elevation"), Elevation) ||
+		!Spec->TryGetNumberField(TEXT("fov"), Fov) ||
+		!Spec->TryGetNumberField(TEXT("margin"), Margin) ||
+		!FMath::IsFinite(Azimuth) || !FMath::IsFinite(Elevation) || !FMath::IsFinite(Fov) ||
+		!FMath::IsFinite(Margin) || Fov < 20 || Fov > 90 || Margin < .02 || Margin > .2 ||
+		FMath::Abs(Elevation) > 80)
+		return JsonString(ErrorObject(TEXT("Invalid framing parameters")));
+	auto ReadVector = [&](const TCHAR* Key, FVector& Out) -> bool
+	{
+		const TArray<TSharedPtr<FJsonValue>>* Values;
+		if (!Spec->TryGetArrayField(Key, Values) || Values->Num() != 3) return false;
+		for (int32 I = 0; I < 3; ++I)
+			if (!(*Values)[I]->TryGetNumber(Out[I]) || !FMath::IsFinite(Out[I])) return false;
+		return true;
+	};
+	const FBox Box = Mesh->Bounds.GetBox();
+	FVector Center = Box.GetCenter(), Extent = Box.GetExtent();
+	FString TargetName = TEXT("mesh_bounds");
+	if (Kind == TEXT("detail"))
+	{
+		FVector Offset;
+		if (!ReadVector(TEXT("extent_cm"), Extent) || Extent.GetMin() <= 0 ||
+			!ReadVector(TEXT("offset_cm"), Offset))
+			return JsonString(ErrorObject(TEXT("Detail requires positive extent_cm and offset_cm")));
+		FString Bone;
+		if (Spec->TryGetStringField(TEXT("bone"), Bone) && !Bone.IsEmpty())
+		{
+			const int32 Index = Mesh->GetBoneIndex(FName(*Bone));
+			if (Index == INDEX_NONE) return JsonString(ErrorObject(TEXT("Detail target bone does not exist: ") + Bone));
+			Center = Mesh->GetBoneLocation(FName(*Bone), EBoneSpaces::WorldSpace);
+			TargetName = Bone;
+		}
+		else
+		{
+			FVector Fraction;
+			if (!ReadVector(TEXT("bounds_fraction"), Fraction) || Fraction.GetAbsMax() > 1)
+				return JsonString(ErrorObject(TEXT("Detail requires actual bone or bounds_fraction in [-1,1]")));
+			Center = Box.GetCenter() + Box.GetExtent() * Fraction;
+			TargetName = TEXT("bounds_fraction");
+		}
+		Center += Offset;
+		if (!Box.IsInsideOrOn(Center))
+			return JsonString(ErrorObject(TEXT("Detail target lies outside subject bounds")));
+	}
+	else if (Kind != TEXT("full_body"))
+		return JsonString(ErrorObject(TEXT("Explicit full_body/detail framing is required")));
+	if (Extent.GetMin() <= 0 || Extent.ContainsNaN())
+		return JsonString(ErrorObject(TEXT("Subject bounds are invalid")));
+	const FVector Direction = FRotator(Elevation, Azimuth, 0).Vector();
+	double Distance = FMath::Max(Extent.Size() * 3., 10.);
+	FVector2D Min, Max;
+	bool InFront = false;
+	auto Measure = [&]()
+	{
+		FSceneViewFamilyContext Family(FSceneViewFamily::ConstructionValues(
+			Target->Viewport, World->Scene, Target->EngineShowFlags).SetRealtimeUpdate(true));
+		FSceneView* View = Target->CalcSceneView(&Family);
+		Min = FVector2D(1.e10, 1.e10); Max = FVector2D(-1.e10, -1.e10);
+		InFront = true;
+		for (int32 I = 0; I < 8; ++I)
+		{
+			const FVector Corner = Center + Extent * FVector(I & 1 ? 1 : -1, I & 2 ? 1 : -1, I & 4 ? 1 : -1);
+			FVector2D Pixel;
+			if (!FSceneView::ProjectWorldToScreen(Corner, View->UnscaledViewRect,
+				View->ViewMatrices.GetWorldToClip(), Pixel))
+			{ InFront = false; continue; }
+			const FVector2D UV(Pixel.X / Size.X, Pixel.Y / Size.Y);
+			Min.X = FMath::Min(Min.X, UV.X); Min.Y = FMath::Min(Min.Y, UV.Y);
+			Max.X = FMath::Max(Max.X, UV.X); Max.Y = FMath::Max(Max.Y, UV.Y);
+		}
+	};
+	if (bApply)
+	{
+		Target->SetViewRotation((-Direction).Rotation());
+		Target->ViewFOV = Fov; Target->FOVAngle = Fov;
+		Target->SetGameView(true); Target->SetRealtime(true);
+		// Fit real projected corners, including perspective depth and actual viewport aspect.
+		for (int32 Iteration = 0; Iteration < 32; ++Iteration)
+		{
+			Target->SetViewLocation(Center + Direction * Distance);
+			Measure();
+			const double Radius = FMath::Max(FMath::Max(.5-Min.X, .5-Min.Y), FMath::Max(Max.X-.5, Max.Y-.5));
+			const double Ratio = Radius / (.5 - Margin);
+			if (InFront && Ratio >= .98 && Ratio <= 1.) break;
+			Distance *= !InFront ? 2. : FMath::Clamp(Ratio * 1.005, .8, 2.);
+		}
+		Target->Invalidate();
+	}
+	Measure();
+	const double Occupancy = FMath::Max(Max.X - Min.X, Max.Y - Min.Y);
+	const bool Fits = InFront && Min.X >= Margin - .005 && Min.Y >= Margin - .005 &&
+		Max.X <= 1.-Margin+.005 && Max.Y <= 1.-Margin+.005 && Occupancy >= .5;
+	const TSharedRef<FJsonObject> Result = MakeShared<FJsonObject>();
+	Result->SetBoolField(TEXT("ok"), Fits);
+	if (!Fits) Result->SetStringField(TEXT("error"), TEXT("Subject framing clipped, behind camera or too small; recapture after fitting"));
+	Result->SetStringField(TEXT("schema"), TEXT("pmx4ue.subject-frame.v1"));
+	Result->SetStringField(TEXT("actor"), Subject->GetPathName());
+	Result->SetStringField(TEXT("mesh"), Mesh->GetSkeletalMeshAsset()->GetPathName());
+	Result->SetStringField(TEXT("kind"), Kind);
+	Result->SetStringField(TEXT("target"), TargetName);
+	Result->SetBoolField(TEXT("subject_visible"), true);
+	Result->SetBoolField(TEXT("in_front"), InFront);
+	Result->SetNumberField(TEXT("viewport_width"), Size.X);
+	Result->SetNumberField(TEXT("viewport_height"), Size.Y);
+	Result->SetNumberField(TEXT("occupancy"), Occupancy);
+	Result->SetNumberField(TEXT("margin"), Margin);
+	Result->SetNumberField(TEXT("fov"), Target->ViewFOV);
+	Result->SetStringField(TEXT("look_at"), Center.ToString());
+	Result->SetStringField(TEXT("location"), Target->GetViewLocation().ToString());
+	Result->SetArrayField(TEXT("rect"), {MakeShared<FJsonValueNumber>(Min.X), MakeShared<FJsonValueNumber>(Min.Y),
+		MakeShared<FJsonValueNumber>(Max.X), MakeShared<FJsonValueNumber>(Max.Y)});
+	Result->SetStringField(TEXT("scope"), TEXT("Visibility and projected bounds only; occlusion and appearance require image review"));
+	return JsonString(Result);
+}
+FString UPMX4UEAgentMCPTools::CaptureVisibleEditorViewport(const FString& OutputFilename, const FString& ActorLabel, const FString& CameraJson)
+{
+	if (!GEditor)
+	{
+		return JsonString(ErrorObject(TEXT("GEditor is unavailable")));
+	}
+	FLevelEditorViewportClient* Target = nullptr;
+	for (FLevelEditorViewportClient* Client : GEditor->GetLevelViewportClients())
+	{
+		if (Client && Client->IsPerspective() && Client->IsVisible() && Client->Viewport)
+		{
+			Target = Client;
+			break;
+		}
+	}
+	if (!Target)
+	{
+		return JsonString(ErrorObject(TEXT("No visible perspective level viewport; open and enlarge the editor viewport")));
+	}
+	const FIntPoint Size = Target->Viewport->GetSizeXY();
+	if (Size.X <= 0 || Size.Y <= 0)
+	{
+		return JsonString(ErrorObject(TEXT("Visible viewport has no drawable pixels")));
+	}
+	const FString SafeName = FPaths::GetCleanFilename(OutputFilename);
+	if (SafeName.IsEmpty() || !SafeName.EndsWith(TEXT(".png"), ESearchCase::IgnoreCase))
+	{
+		return JsonString(ErrorObject(TEXT("Capture filename must be a PNG")));
+	}
+	const FString Directory = FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("PMX4UECaptures"));
+	IFileManager::Get().MakeDirectory(*Directory, true);
+	const FString Path = FPaths::Combine(Directory, SafeName);
+	if (IFileManager::Get().FileExists(*Path))
+	{
+		return JsonString(ErrorObject(TEXT("Capture already exists; choose a new run")));
+	}
+	Target->Invalidate();
+	Target->Viewport->Draw();
+	TSharedPtr<FJsonObject> Framing;
+	if (!ActorLabel.IsEmpty() || !CameraJson.IsEmpty())
+	{
+		const FString Receipt = FramePreviewSubject(ActorLabel, CameraJson, false);
+		if (!FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Receipt), Framing) ||
+			!Framing.IsValid() || !Framing->GetBoolField(TEXT("ok")))
+			return Receipt;
+	}
+	TArray<FColor> Pixels;
+	if (!Target->Viewport->ReadPixels(Pixels) || Pixels.Num() != Size.X * Size.Y)
+	{
+		return JsonString(ErrorObject(TEXT("Visible viewport backbuffer read failed")));
+	}
+	// Scene screenshots are opaque. Backbuffer alpha is not a coverage mask.
+	for (FColor& Pixel : Pixels)
+	{
+		Pixel.A = 255;
+	}
+	TArray64<uint8> Png;
+	FImageUtils::PNGCompressImageArray(Size.X, Size.Y, TArrayView64<const FColor>(Pixels.GetData(), Pixels.Num()), Png);
+	if (Png.IsEmpty() || !FFileHelper::SaveArrayToFile(Png, *Path))
+	{
+		return JsonString(ErrorObject(TEXT("Could not write visible viewport PNG")));
+	}
+	const IConsoleVariable* ScreenPercentage = IConsoleManager::Get().FindConsoleVariable(TEXT("r.ScreenPercentage"));
+	const TSharedRef<FJsonObject> Result = MakeShared<FJsonObject>();
+	Result->SetBoolField(TEXT("ok"), true);
+	Result->SetStringField(TEXT("source"), TEXT("visible_viewport_backbuffer"));
+	if (Framing.IsValid()) Result->SetObjectField(TEXT("framing"), Framing);
+	Result->SetStringField(TEXT("alpha_policy"), TEXT("opaque_scene"));
+	Result->SetStringField(TEXT("output_path"), Path);
+	Result->SetNumberField(TEXT("width"), Size.X);
+	Result->SetNumberField(TEXT("height"), Size.Y);
+	Result->SetNumberField(TEXT("r_screen_percentage_setting"), ScreenPercentage ? ScreenPercentage->GetFloat() : -1.0f);
+	return JsonString(Result);
+}
+
+FString UPMX4UEAgentMCPTools::CheckPreviewTextureResidency(const FString& ActorLabel, float HoldSeconds)
+{
+	if (!GEditor || ActorLabel.IsEmpty())
+	{
+		return JsonString(ErrorObject(TEXT("Editor and preview actor label are required")));
+	}
+	UWorld* World = GEditor->GetEditorWorldContext().World();
+	if (!World)
+	{
+		return JsonString(ErrorObject(TEXT("No editor world is loaded")));
+	}
+	USkeletalMeshComponent* Mesh = nullptr;
+	for (TActorIterator<AActor> It(World); It; ++It)
+	{
+		if (It->GetActorLabel().Equals(ActorLabel, ESearchCase::CaseSensitive))
+		{
+			Mesh = It->FindComponentByClass<USkeletalMeshComponent>();
+			break;
+		}
+	}
+	if (!Mesh)
+	{
+		return JsonString(ErrorObject(TEXT("Preview skeletal mesh actor not found")));
+	}
+	TSet<UTexture2D*> UniqueTextures;
+	for (int32 Slot = 0; Slot < Mesh->GetNumMaterials(); ++Slot)
+	{
+		if (UMaterialInterface* Material = Mesh->GetMaterial(Slot))
+		{
+			TArray<UTexture*> Used;
+			Material->GetUsedTextures(Used);
+			for (UTexture* Texture : Used)
+			{
+				if (UTexture2D* Texture2D = Cast<UTexture2D>(Texture))
+				{
+					if (Texture2D->GetPathName().StartsWith(TEXT("/Game/")))
+					{
+						UniqueTextures.Add(Texture2D);
+					}
+				}
+			}
+		}
+	}
+	if (UniqueTextures.IsEmpty())
+	{
+		return JsonString(ErrorObject(TEXT("No /Game Texture2D used by preview materials; cannot validate texture loading")));
+	}
+	TArray<TSharedPtr<FJsonValue>> Rows;
+	int32 Pending = 0;
+	for (UTexture2D* Texture : UniqueTextures)
+	{
+		Texture->SetForceMipLevelsToBeResident(FMath::Clamp(HoldSeconds, 1.0f, 120.0f));
+		const FStreamableRenderResourceState& State = Texture->GetStreamableResourceState();
+		const int32 Available = State.MaxNumLODs;
+		const int32 Resident = Texture->GetNumResidentMips();
+		const bool bReady = Available > 0 && Resident >= Available;
+		Pending += bReady ? 0 : 1;
+		const TSharedRef<FJsonObject> Row = MakeShared<FJsonObject>();
+		Row->SetStringField(TEXT("path"), Texture->GetPathName());
+		Row->SetNumberField(TEXT("available_mips"), Available);
+		Row->SetNumberField(TEXT("resident_mips"), Resident);
+		Row->SetBoolField(TEXT("ready"), bReady);
+		Rows.Add(MakeShared<FJsonValueObject>(Row));
+	}
+	const TSharedRef<FJsonObject> Result = MakeShared<FJsonObject>();
+	Result->SetBoolField(TEXT("ok"), true);
+	Result->SetBoolField(TEXT("ready"), Pending == 0);
+	Result->SetNumberField(TEXT("checked"), UniqueTextures.Num());
+	Result->SetNumberField(TEXT("pending"), Pending);
+	Result->SetArrayField(TEXT("textures"), Rows);
 	return JsonString(Result);
 }

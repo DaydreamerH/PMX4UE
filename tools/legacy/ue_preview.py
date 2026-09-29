@@ -20,7 +20,7 @@ def _look_at_rotation(origin, target) -> unreal.Rotator:
     dz = target.z - origin.z
     yaw = math.degrees(math.atan2(dy, dx))
     pitch = math.degrees(math.atan2(dz, math.sqrt(dx * dx + dy * dy)))
-    return unreal.Rotator(pitch, yaw, 0.0)
+    return unreal.Rotator(pitch=pitch, yaw=yaw, roll=0.0)
 
 
 def _destroy_previous(cid: str) -> None:
@@ -44,7 +44,7 @@ def spawn_character(ctx, mesh=None, location=None):
         raise RuntimeError(f"skeletal mesh not found: {ctx.names['mesh_asset']}")
     spawn_location = location or unreal.Vector(0.0, 0.0, 0.0)
     actor = unreal.EditorLevelLibrary.spawn_actor_from_class(
-        unreal.SkeletalMeshActor, spawn_location, unreal.Rotator(0, 0, 0)
+        unreal.SkeletalMeshActor, spawn_location, unreal.Rotator()
     )
     if actor is None:
         raise RuntimeError("failed to spawn SkeletalMeshActor")
@@ -95,7 +95,7 @@ def setup_preview(ctx, mesh, key_light_actor=None):
     _destroy_previous(cid)
 
     actor = unreal.EditorLevelLibrary.spawn_actor_from_class(
-        unreal.SkeletalMeshActor, unreal.Vector(0, 0, 0), unreal.Rotator(0, 0, 0)
+        unreal.SkeletalMeshActor, unreal.Vector(0, 0, 0), unreal.Rotator()
     )
     if actor:
         actor.set_actor_label(f"{cid}_Preview")
@@ -112,8 +112,8 @@ def setup_preview(ctx, mesh, key_light_actor=None):
     key = unreal.EditorLevelLibrary.spawn_actor_from_class(
         unreal.DirectionalLight, key_location, _look_at_rotation(key_location, target)
     )
-    fill = unreal.EditorLevelLibrary.spawn_actor_from_class(unreal.PointLight, fill_location, unreal.Rotator(0, 0, 0))
-    rim = unreal.EditorLevelLibrary.spawn_actor_from_class(unreal.PointLight, rim_location, unreal.Rotator(0, 0, 0))
+    fill = unreal.EditorLevelLibrary.spawn_actor_from_class(unreal.PointLight, fill_location, unreal.Rotator())
+    rim = unreal.EditorLevelLibrary.spawn_actor_from_class(unreal.PointLight, rim_location, unreal.Rotator())
     for spawned, label in ((key, f"{cid}_Key"), (fill, f"{cid}_Fill"), (rim, f"{cid}_Rim")):
         if spawned:
             spawned.set_actor_label(label)
@@ -142,7 +142,7 @@ def setup_preview(ctx, mesh, key_light_actor=None):
         safe_set(fill.get_component_by_class(unreal.PointLightComponent), "attenuation_radius", 650.0)
 
     post_process = unreal.EditorLevelLibrary.spawn_actor_from_class(
-        unreal.PostProcessVolume, unreal.Vector(0, 0, 0), unreal.Rotator(0, 0, 0)
+        unreal.PostProcessVolume, unreal.Vector(0, 0, 0), unreal.Rotator()
     )
     if post_process:
         post_process.set_actor_label(f"{cid}_ValidationExposure")

@@ -12,10 +12,13 @@
 - 源 mesh 构建 run / 当前材质构建 run / 历史导入警告及处置依据：
 - 已完成（附日志/报告及输入版本）：
 - 骨骼、材质、动态物理、碰撞过滤、性能各自验收状态：
-- 材质 preview profile / 独立地图 / capture report / A/B 图片 / material-review：
+- 双侧手臂/肩链 skeleton_decision / 源 audit 与 blend 指纹 / 保留理由或 upper_only FBX 与导入证据 / IK、物理是否引用选定 mesh：
+- 材质 preview profile / 自有进程加载的 Open World 日光地图（不保存）/ capture report / A/B 图片 / material-review：
 - material-design / 各族父图与构建脚本 / 未实现的高光、眼睛层次、袜类厚度、刘海/轮廓效果 / 当前质量阶段：
 - 材质截图是否实际打开、谁审核 / 未分类贴图处置 / 未满足的特征要求：
 - 实际 input_audit / material_debt / 缺资源关闭项的替代实验或用户批准范围：
+- 脸部专项：delivery v2 face_shading / 真实 SDF 数据检查与导入源对应或替代方案 / 三方向静态光照证据 / 运行时状态；未完成项的 next_action 与 resume_when：
+- 场景效果：delivery v2 scene_effects / outline、rim 选择依据 / 构建与实际挂载回执 / 同条件开关图 / runtime_binding 与游戏接入待验证项 / 额外绘制成本：
 - 最早基线截图 / 复用网格材质实验 / API 小探测的版本和覆盖边界：
 - 物理更换动作入口 / 同骨架动画与重定向器 / 对照 ABP：
 - 性能原始报告与复核结果 / 自有进程退出码 / 实际视口与内部渲染分辨率 / 画质硬件 / 重复次数：

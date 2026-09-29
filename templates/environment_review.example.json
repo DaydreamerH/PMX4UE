@@ -1,0 +1,13 @@
+{
+  "report": "REPLACE_WITH_ABSOLUTE_BASELINE_REPORT_PATH",
+  "report_sha256": "REPLACE_WITH_ACTUAL_REPORT_SHA256",
+  "lit_image_sha256": ["REPLACE_WITH_ALL_OPENED_LIT_IMAGE_SHA256_VALUES"],
+  "images_opened": false,
+  "reviewer": "",
+  "exposure_reason": "",
+  "observations": {
+    "sky": "",
+    "ground": "",
+    "character": ""
+  }
+}

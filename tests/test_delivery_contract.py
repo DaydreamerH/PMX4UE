@@ -11,7 +11,7 @@ class DeliveryContractTests(unittest.TestCase):
     def review_with_evidence(self, folder, kind, value, **extra):
         path = Path(folder) / "evidence.json"
         path.write_text(json.dumps(value), encoding="utf-8")
-        return review_delivery({"schema": "pmx4ue.delivery.v1", "project": "x.uproject", "scope": ["materials"],
+        return review_delivery({"schema": "pmx4ue.delivery.v2", "project": "x.uproject", "scope": ["materials"],
             "evidence": [{"id": "e", "kind": kind, "path": str(path.resolve()),
                           "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}], **extra}, "x.uproject")
 
@@ -40,7 +40,7 @@ class DeliveryContractTests(unittest.TestCase):
             self.assertFalse(any("same-report/view/light/mode" in row for row in report["unresolved"]))
 
     def test_no_visual_evidence_is_not_completion(self):
-        report = review_delivery({"schema": "pmx4ue.delivery.v1", "project": "x.uproject", "scope": ["materials"]}, "x.uproject")
+        report = review_delivery({"schema": "pmx4ue.delivery.v2", "project": "x.uproject", "scope": ["materials"]}, "x.uproject")
         self.assertEqual(report["status"], "incomplete")
         self.assertFalse(report["visual_accepted"])
 
@@ -51,7 +51,7 @@ class DeliveryContractTests(unittest.TestCase):
                                         "import_risks": ["zero length normal"]}))
             evidence = {"id": "base", "kind": "run", "path": str(path.resolve()),
                         "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
-            report = review_delivery({"schema": "pmx4ue.delivery.v1", "project": "x.uproject", "scope": ["materials"],
+            report = review_delivery({"schema": "pmx4ue.delivery.v2", "project": "x.uproject", "scope": ["materials"],
                                       "evidence": [evidence]}, "x.uproject")
             self.assertIn("base:zero length normal", report["import_risks"])
             self.assertTrue(any("Unresolved" in row for row in report["unresolved"]))
@@ -60,6 +60,6 @@ class DeliveryContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "report.json"
             path.write_text("{}")
-            report = review_delivery({"schema": "pmx4ue.delivery.v1", "project": "x.uproject", "scope": ["materials"],
+            report = review_delivery({"schema": "pmx4ue.delivery.v2", "project": "x.uproject", "scope": ["materials"],
                 "evidence": [{"id": "old", "kind": "run", "path": str(path.resolve()), "sha256": "wrong"}]}, "x.uproject")
             self.assertIn("Missing/stale evidence: old", report["unresolved"])

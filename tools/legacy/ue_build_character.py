@@ -154,6 +154,10 @@ def main() -> None:
         raise BuildError("skeletal mesh is not available; run import mode first")
     if isinstance(mesh, unreal.SkeletalMesh):
         report["skeletal_mesh"] = mesh.get_path_name()
+        if mode in ("import", "build", "full") and ctx.config.get("pmx4ue"):
+            sys.path.insert(0, str(FRAMEWORK_DIR.parent))
+            from ue_skeleton_guard import inspect_imported_skeleton
+            report["skeleton_structure"] = inspect_imported_skeleton(ctx.config, mesh)
 
     if mode in ("material", "build", "full"):
         master = create_master(ctx, ctx.texture_map)

@@ -34,6 +34,8 @@ PMX4UE/
 
 ## 开始使用
 
+最新执行要求：先做双侧手臂/肩链审阅与 skeleton_decision，再将选定 FBX 导入用于 IK/物理；preserve 不代表可以跳过审阅。描边/边缘光用 [场景效果闭环](docs/scene-effects-workflow.md) 的 scene-effects-build 与真实挂载对照；delivery v2 显式记录 face_shading 和 scene_effects。新增代码验证范围以 VERIFICATION 顶部为准，旧章节的实测状态不自动覆盖新版本。
+
 材质迭代新增 [小实验与交付规程](docs/material-iteration-and-delivery.md)：`material-preflight` 探测采样/API、`material-build` 复用网格构建新材质、`delivery-check` 复核版本组合与效果证据。逐槽实际输入读回、中性默认纹理和未完成效果记录防止串槽与无声降级。这些新增实现尚未运行测试或 UE 验证，不是新的视觉效果通过记录。
 
 材质视觉闭环见 [材质工作流](docs/agent-material-workflow.md)：`material-preview` 在自有新编辑器与隔离关卡完成固定视角 A/B 截图，不清理当前场景；图片完整与视觉认可分别记录。该新增采集路径仍待独立 UE 工程验证，见 `VERIFICATION.md`。

@@ -19,7 +19,8 @@ import bpy
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
-from blender_skeleton_audit import collect_bone_references
+from blender_skeleton_audit import collect_bone_references, collect_control_facts, enable_mmd_metadata
+from skeleton_plan import verify_postconditions
 from blender_fbx_units import prepare_cm_native_scene, audit_fbx_units, assert_cm_native_contract
 sys.path.insert(0,str(SCRIPT_DIR.parent))
 from blender_fbx_bind import normalize as normalize_fbx_bind
@@ -115,6 +116,13 @@ def _validate_plan(plan, armature, meshes):
     deleted = {op["bone"] for op in plan["operations"] if op["op"] == "delete_unweighted_leaf"}
     reparented = {op["bone"] for op in plan["operations"] if op["op"] == "reparent"}
     references, unscanned = collect_bone_references(armature)
+    controls = set(plan.get("compatibility", {}).get("neutral_controls", []))
+    facts = collect_control_facts(armature)
+    if any(not facts.get(name, {}).get("neutral") for name in controls):
+        raise RuntimeError("UE-FK shoulder controls must remain neutral; regenerate the plan")
+    if any(ref.get("target") in controls and ref.get("kind") in
+           {"bone_morph", "action_curve", "driver_path", "driver_target", "driver_target_path"} for ref in references):
+        raise RuntimeError("UE-FK shoulder controls have animation/morph/driver dependencies")
     if unscanned or any(ref["target"] in deleted or
                         (ref["kind"] == "action_curve" and ref["target"] in reparented)
                         for ref in references):
@@ -168,6 +176,7 @@ def main():
     if len(armatures) != 1 or not meshes:
         raise RuntimeError("expected exactly one armature and at least one mesh")
     armature = armatures[0]
+    enable_mmd_metadata(armature)
     _validate_plan(plan, armature, meshes)
     before_poses = _pose_samples(armature, meshes, plan["roles"])
     before_bones = {bone.name: bone.matrix_local.copy() for bone in armature.data.bones}
@@ -200,6 +209,8 @@ def main():
         if before_groups[mesh.name] != [(group.name, group.index) for group in mesh.vertex_groups]:
             raise RuntimeError(f"vertex groups changed: {mesh.name}")
     remaining = armature.data.bones
+    final_parents = {bone.name: bone.parent.name if bone.parent else None for bone in remaining}
+    postconditions = verify_postconditions(plan, final_parents)
     if len(remaining) != len(before_bones) - sum(op["op"] == "delete_unweighted_leaf" for op in plan["operations"]):
         raise RuntimeError("unexpected bone count after edit")
     max_bone_delta = max(
@@ -237,6 +248,8 @@ def main():
         "weight_groups_unchanged": True, "max_rest_vertex_delta": rest_delta,
         "max_rest_bone_matrix_delta": max_bone_delta, "pose_max_deltas": pose_deltas,
         "animation_validation": "pending",
+        "postconditions": postconditions, "final_bone_parents": final_parents,
+        "compatibility": plan.get("compatibility"),
         "fbx_units": "centimeter_native_root_scale_1" if args.cm_native else "legacy",
         "max_cm_bake_pose_delta_m": cm_delta,
     }

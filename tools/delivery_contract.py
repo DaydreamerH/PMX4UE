@@ -8,6 +8,9 @@ import json
 from pathlib import Path
 import re
 from tools.material_preview_contract import verify_report
+from tools.face_shading_delivery import review_face_shading
+from tools.scene_effect_delivery import review_scene_effects
+from tools.material_feature_delivery import review_material_features, review_scene_gameplay
 
 
 def digest(path):
@@ -18,8 +21,8 @@ def review_delivery(profile, project):
     issues, evidence_hashes, reports = [], {}, {}
     def issue(message):
         issues.append(message)
-    if profile.get("schema") != "pmx4ue.delivery.v1":
-        issue("Unknown delivery schema")
+    if profile.get("schema") != "pmx4ue.delivery.v2":
+        issue("Delivery v2 required: migrate v1 by adding an explicit face_shading decision")
     if Path(profile.get("project", "")).resolve() != Path(project).resolve():
         issue("Delivery project mismatch")
     if not profile.get("scope"):
@@ -69,6 +72,7 @@ def review_delivery(profile, project):
     capture_hashes, capture_cases, debts, risks, slots = {}, {}, {}, set(), set()
     material_validation = False
     build_records = False
+    slot_rows = {}
     for ident, (kind, report) in reports.items():
         if kind in {"capture", "material_validation", "run"} and not isinstance(report, dict):
             issue(f"Expected JSON object evidence: {ident}")
@@ -91,6 +95,7 @@ def review_delivery(profile, project):
                 issue(f"Failed material validation: {ident}")
             slots.update(r["slot"] for r in report.get("slot_audit", []))
             for row in report.get("slot_audit", []):
+                slot_rows[row["slot"]] = row
                 # An empty audit is valid for an untextured graph only when the
                 # validator explicitly enumerated its zero supported inputs.
                 inputs = row.get("input_audit")
@@ -150,6 +155,11 @@ def review_delivery(profile, project):
         else:
             issue(f"Effect unfinished: {ident}: {state}; next={effect.get('next_action')}")
     resolutions = profile.get("dispositions", {})
+    if "materials" in profile.get("scope", []):
+        review_face_shading(profile, slot_rows, debts, reports, capture_cases, issue, evidence_hashes)
+        review_scene_effects(profile, reports, issue)
+        review_material_features(profile, slots, reports, capture_cases, issue)
+        review_scene_gameplay(profile, reports, issue)
     for ident in sorted(set(debts) | risks):
         row = resolutions.get(ident, {})
         # Never silently mark a still-disabled feature 'fixed'. It can only be
@@ -165,10 +175,14 @@ def review_delivery(profile, project):
             valid = False
         if not valid:
             issue(f"Unresolved degradation/import risk: {ident}; supply next experiment or explicit disposition")
-    return dict(schema="pmx4ue.delivery-check.v1",
+    return dict(schema="pmx4ue.delivery-check.v2",
                 status="incomplete" if issues else "evidence_complete_needs_human_judgment",
                 visual_accepted=False, scope=profile.get("scope"), selected_assets=assets,
                 unresolved=issues, material_debt=debts, import_risks=sorted(risks),
                 dispositions=resolutions,
+                face_shading=profile.get("face_shading"),
+                scene_effects=profile.get("scene_effects"),
+                material_acceptance=profile.get("material_acceptance"),
+                material_features=profile.get("material_features"),
                 evidence_sha256=evidence_hashes,
                 note="Checks evidence consistency, not beauty, actual UE compatibility, or completeness of human-declared scope")

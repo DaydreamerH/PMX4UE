@@ -10,14 +10,34 @@
 
 新模型仍出现绑定警告时将骨骼验收标为待处理，不能设 use_t0_as_ref_pose 掩盖。`blender_audit_fbx_bind_pose.py` 只是序列化矩阵诊断（多 mesh 对比有限），不能代替 SDK/UE 验证。精度修正也不能处理错误父级、错单位或真正的非单位骨缩放。
 
-## 默认保留、按需优化上半身
+## 先审阅上肢，再决定保留或优化
 
-默认 `pmx4ue.skeleton_policy="preserve"`：导出基线直接使用，不修改腿骨。若用户需要上半身清理：
+**UE 重定向优先：** 先执行 [UE FK 骨架方案](../../../docs/ue-fk-skeleton.md)。新工作单以 `clean_ue_fk + branch_helpers` 为目标；不要求兼容原 PMX 控制动画。手臂扭转骨有权重、P/C 有补偿，都不构成原层级必须保留的理由。先实际整理主链，删除辅助骨只是可选的进一步精简。下述删除模式和保留证据仍适用于旧工作单及已干净的旁支。
+
+初始 `pmx4ue.skeleton_policy="preserve"` 只是防止未经审阅就改骨，不代表可以直接进入 IK/物理。每个角色都要运行 `skeleton-audit → skeleton-review`，审阅双侧手臂和肩链；命名映射由 agent 根据真实数据完成。链条已经直接、或中间骨具有必要变形/约束语义时可以保留，不以删除骨骼数量考核优化。
+
+把 `templates/skeleton_decision.example.json` 复制到产物目录的 `skeleton_decision.json`（或通过 `pmx4ue.skeleton_decision` 指定绝对路径），填写当前 audit 和源 blend 的 SHA256、与工作单一致的 `roles`，以及 `arms`、`shoulders` 各自的 `action=preserve/optimize` 和理由。保留包含中间骨的链时附 `preservation_evidence: [{"path":"绝对路径", "sha256":"文件哈希"}]`，内容必须解释权重/约束/变形试验，不是简单写“默认保留”。未知骨名/路径先适配，不能勾选 reviewed 绕过。
+
+选择优化时：
 
 1. 根据实际 audit 填 `skeleton.roles` 的 `left`、`right` 和 `torso`。键的含义见 `tools/legacy/skeleton_review.py:resolved_roles`，示例语义：`upper_arm`、`elbow`、`wrist`、`upper_twist`、`forearm_twist`、`shoulder`。名称必须来自这个模型，非英文骨名可直接保留。
 2. 设置 `skeleton_policy="upper-only"`、`skeleton_reviewed=true`。是否简化肩链由 `skeleton.simplify_shoulders` 显式决定。
 3. `skeleton-plan` 只产生重挂父级/已证实无权重叶节点删除计划。`skeleton-apply` 验证源文件身份、保留顶点组，比较静态位置与上半身采样姿势，然后输出独立 `upper_only.fbx`。
 4. 引用/约束阻止修改时分析其语义；可新增仅用于导出的适配步骤，不能简单清空检查结果。加测试证明替代方案。参考姿势阈值通过仍不代表重定向通过。
+
+### 肩膀完整清理与旧记录迁移（2026-09-28）
+
+主链已经是 torso → shoulder → upper_arm，并不代表清理完成：仍存在映射后的 P/C 时，review 标为 `residual_shoulder_helpers`。选择 optimize 后，规划器也会检查旁支残留、部分改直的链；无权重且无被引用依赖的 P/C 才能删除。额外待清理骨在每侧 `shoulder_helpers` 列出，不按名称通配删除。删除骨的保留子骨必须逐一填写 `rehome_before_delete`；带权重的肩、扭转和辅助变形骨不删除。
+
+若决定保留残留骨，`shoulders.helper_decisions` 必须覆盖 review 返回的每个 helper，逐骨填写 `action="retain"`、`reason`、`evidence_path`，后者指向 `preservation_evidence` 中的实际证据文件。证据内容仍由 agent 审阅，文件哈希不是语义正确性的证明。
+
+新 plan 含 `postconditions.absent/parents`；apply 报告含 `final_bone_parents` 和后置条件回执。UE 导入后再次从真实 mesh 读取父级，写入 `ue_build_report.skeleton_structure`。支持的 IK/物理写入口同时检查这些证据和实际目标 mesh；带未解决导入风险的记录不放行。缺少新字段的旧 plan/apply/import 报告不可补一个 passed 标记迁移，应重新执行对应阶段并保存新版本产物。
+
+此门槛验证结构与导出来源，不等于动作/物理验收。Blender 引用扫描也不等于完整 PMX 追加变换、骨骼 morph、刚体/关节语义证明；存在这些依赖时先分析、适配或明确阻塞，不能以零权重直接认定无用。
+
+`ue-build` 执行前检查这份决策；`ik/retarget-pose/physics-build/physics-test/performance` 同样检查。选择 upper-only 时必须有匹配计划的 apply 报告、导出 FBX 与成功运行记录，之后 IK/物理目标必须使用该 FBX 导入的 mesh，不能又选回原始版本。运行器的 dry-run 只展示命令，不代替上述执行检查。
+
+旧工作单迁移：补上肢 audit/语义/决策，不得把旧 skeleton_reviewed 自动改 true。纯材质迭代的 `material-build` 不要求重导出或重新处理已认可的 mesh；其它复用/自定义入口需要关联原骨骼证据并作显式适配，不通过直接调用 legacy 跳过审阅。
 
 运行器不会调用腿骨清理。旧算法及其测试保留作为归档，不是默认建议；不需要额外增加“腿骨没变”的重复操作。
 

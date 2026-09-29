@@ -17,12 +17,14 @@ Windows 构建启动前，阅读[环境参考：UBT 跟踪日志与沙箱](../sk
 | 阶段 | agent 要完成的判断/产物 |
 |---|---|
 | audit → export | 审核单位、贴图完整性；源 PMX 只读，厘米 FBX，manifest 保留 PMX 原名→导出骨名 |
-| skeleton-audit | 骨骼语义、权重、共同祖先；默认 preserve，不清理腿骨 |
-| skeleton-plan → skeleton-apply（可选） | 有证据才选择 upper-only；独立输出，不覆盖原 mesh |
+| skeleton-audit → skeleton-review → 上肢决策 | 双侧手臂/肩链、权重和引用必须审阅；填写 skeleton_decision，不以默认 preserve 跳过；不清理腿骨 |
+| skeleton-plan → skeleton-apply（决策选择优化时） | upper-only，保留有权重扭转骨；计划/导出记录对应新 FBX，后续 IK/物理使用其导入 mesh |
 | material-draft → 逐材质族设计 → material-check | 按 material-families.md 设计专用图/共享函数/Pass 与局部验收；覆盖真实槽、纹理/UV/通道、父路由，不把建议或基础贴色当最终效果 |
 | ue-build → ue-validate → material-compile | 新 namespace 导入；槽/参数/纹理检查，再实际 RHI 材质编译；此时视觉仍 pending |
-| material-preview → agent 视觉审核 | 隔离地图和组件材质变体，固定视角/多光照/Lit+Unlit+WorldNormal；等待真实 PNG，填写 material-review；无动画也可执行 |
-| face-sdf（可选，脸部 SDF 材质已有时） | 审核头骨、参考双轴、槽与 provider，生成独立材质/预览 BP；按 face-sdf-runtime.md 验证真实动画跟随 |
+| material-preview → agent 视觉审核 | 自有可见编辑器直接加载 Open World 日光地图（不另建/保存预览地图），组件材质变体，固定视角、按需多光照，默认仅 Lit；Unlit/WorldNormal 仅在排错时定点补单张；等待角色贴图 mip 驻留和真实 PNG，记录尺寸但不以尺寸判定清晰度；填写 material-review；无动画也可执行 |
+| 脸部阴影专项（首组基线后、材质交付前） | 按 face-shading-workflow.md 生成并检查真实 SDF、绑定和三方向光照，或验证替代方案；Neutral 及关闭开关保持未完成；无需动画 |
+| scene-effects-build → material-preview（逐项候选） | 按 scene-effects-workflow.md 审阅描边/边缘光，构建、实际挂载、同条件开关对照；不采用须有依据，不能只有资产或默认关闭 |
+| face-sdf（已选择 SDF 路线且静态通过后） | 此入口只接入驱动，不生成贴图；审核头骨、双轴、槽与 provider，生成独立材质/预览 BP；动画跟随按 face-sdf-runtime.md 单独验收 |
 | physics-inventory → draft_profiles.py | 读取 PMX 原始刚体/关节/双向 mask；生成未审核 IK/物理档案 |
 | ik → 姿态采集/模型与配对方案 → retarget-pose → 新进程重载 | 双侧真实不同骨架，角色语义驱动；详见 agent-retarget-workflow.md |
 | animation-export（有动作时） | 用审核后的 RTG 输出新动画，保留源 root-lock/轨道；再看目标角色动作 |

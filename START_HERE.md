@@ -2,12 +2,14 @@
 
 这是源码工作台，不是携带角色资源的一键成品插件。脚本负责转换和测量，agent 负责模型判断、适配与视觉检查。
 
+当前流程增加了上肢审阅执行检查，以及 [描边/边缘光场景闭环](docs/scene-effects-workflow.md)。旧工作单不能仅凭默认 preserve 进入 IK/物理；材质交付 v2 除 face_shading 外还要填写 scene_effects。迁移按领域参考补真实决策，不能自动把 pending 改成 reviewed。
+
 ## 你需要提供
 
 1. 目标 UE 工程的 `.uproject` 路径。
 2. PMX 及其完整贴图，保持原始相对路径。
 3. 若需动态验收，提供源动画及其骨架；只有 PMX 可先完成静止部分。
-4. 可选参考画面、目标平台、性能预算。
+4. 可选目标图/参考画面、目标平台、性能预算。有目标图时增加图像分析与结果对照；没有目标图也能正常完成流程。
 
 将整个 `PMX4UE` 文件夹放到目标工程内或旁边。无需复制任何历史工程的 Content/Saved；无需读取历史聊天。Python 3.10+、Blender 3.6+mmd_tools、UE 5.8 系列及匹配的 C++ 构建工具由 agent 检查。其它版本需明确适配。
 
@@ -18,6 +20,8 @@
 `AGENTS.md` → `skills/pmx-to-ue/SKILL.md` → [执行手册](docs/fresh-project-runbook.md)。
 
 agent 在本工作台运行 `init` 建立本机工单，检查工具与插件，按模型证据逐阶段执行。具体命令见 [README](README.md)。普通 `run` 是预览，加 `--execute` 才实际执行。
+
+脸部阴影在首组材质基线后推进、静态材质交付前完成，见 [脸部专项](docs/face-shading-workflow.md)。`face-sdf` 入口只接入头骨方向驱动，贴图须另外生成/检查。交付清单已升级 v2，必须明确 SDF 或已验证的替代方案；白色占位图和关闭的开关不算完成。无动画不影响静态部分。
 
 ## 插件与更新
 

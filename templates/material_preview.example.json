@@ -1,20 +1,24 @@
 {
-  "schema": "pmx4ue.material-preview.v1",
+  "schema": "pmx4ue.material-preview.v3",
   "reviewed": false,
   "mesh": "/Game/PMX4UE/Character/v1/Mesh/REPLACE_WITH_ACTUAL_MESH",
-  "level": "/Game/PMX4UE/Character/v1/Preview/MaterialReview_v1",
-  "width": 1200,
-  "height": 1200,
+  "environment": {
+    "template": "/Engine/Maps/Templates/OpenWorld",
+    "model_location": [0, 0, 0]
+  },
+  "capture": {"mode": "visible_viewport_backbuffer"},
   "warmup_seconds": 5,
-  "exposure_ev100": 3,
+  "exposure_ev100": null,
   "cameras": [
-    {"name": "Front", "azimuth": 90, "distance": 260, "height": 8, "fov": 38},
-    {"name": "Side", "azimuth": 0, "distance": 260, "height": 8, "fov": 38}
+    {"name": "Front", "azimuth": 90, "elevation": 0, "fov": 38,
+     "framing": {"kind": "full_body", "margin": 0.08}},
+    {"name": "Side", "azimuth": 0, "elevation": 0, "fov": 38,
+     "framing": {"kind": "full_body", "margin": 0.08}}
   ],
   "lights": [
-    {"name": "KeyA", "pitch": -35, "yaw": -45, "intensity": 6},
-    {"name": "KeyB", "pitch": -35, "yaw": 135, "intensity": 6}
+    {"name": "DefaultDaylight"}
   ],
-  "modes": ["Lit", "Unlit", "WorldNormal"],
+  "modes": ["Lit"],
+  "diagnostic_captures": [],
   "cases": [{"name": "Baseline", "slots": []}]
 }

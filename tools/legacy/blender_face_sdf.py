@@ -12,6 +12,7 @@ Run:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import sys
@@ -21,6 +22,9 @@ from pathlib import Path
 import bmesh
 import bpy
 import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from face_sdf_convention import ENCODING, analyze_monotonicity
 
 MODEL_FACING_YAW = {"-Y": 0.0, "+Y": 180.0, "+X": 90.0, "-X": 270.0}
 
@@ -40,6 +44,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--threshold", type=float, default=0.05)
     parser.add_argument("--despeckle", type=int, default=2)
     parser.add_argument("--model-faces", choices=("-Y", "+Y", "+X", "-X"), default="-Y")
+    parser.add_argument("--monotonic-policy", choices=("reject", "first_shadow"), default="reject")
+    parser.add_argument("--monotonic-tolerance", type=float, default=0.01)
+    parser.add_argument("--review-reason", default="")
+    parser.add_argument("--highlight-mode", choices=("disabled", "legacy_uv_ellipses"), default="disabled")
     return parser.parse_args(argv)
 
 
@@ -254,10 +262,17 @@ def main() -> None:
         raise RuntimeError("--frames must be an odd number >= 3")
     output_dir = Path(args.output_dir).resolve()
     output_name = args.output_name or f"T_{args.character_id}_FaceSDF_RGBA.png"
+    if output_dir.exists() and any(output_dir.iterdir()):
+        raise RuntimeError("Output directory is not empty; use a new bake version")
+    if Path(output_name).name != output_name or Path(output_name).suffix.lower() != ".png":
+        raise RuntimeError("--output-name must be a PNG basename")
+    if not math.isfinite(args.monotonic_tolerance) or not 0 <= args.monotonic_tolerance <= 1:
+        raise RuntimeError("--monotonic-tolerance must be 0..1")
+    if (args.monotonic_policy != "reject" or args.monotonic_tolerance != 0.01 or
+            args.highlight_mode != "disabled") and not args.review_reason.strip():
+        raise RuntimeError("Nondefault loss/highlight policy requires --review-reason based on this model")
     masks_dir = output_dir / "masks"
     masks_dir.mkdir(parents=True, exist_ok=True)
-    for stale in masks_dir.glob("*.png"):
-        stale.unlink()
 
     source, face_material_index = find_face_source(args.face_slot)
     source.hide_render = True
@@ -308,14 +323,27 @@ def main() -> None:
         save_rgba(masks_dir / f"mask_{index:02d}_{int(round(angle)):03d}deg.png", preview)
         print(f"[SDF] baked {index + 1}/{args.frames}: {angle:.2f} degrees")
 
-    red = shadow_threshold_from_masks(masks)
     coverage_material = make_coverage_material(bake_image)
     face_obj.data.materials[0] = coverage_material
     bpy.ops.object.bake(type="EMIT", margin=8, use_clear=True)
     bake_image.pixels.foreach_get(pixel_buffer)
     coverage = pixel_buffer.reshape(args.resolution, args.resolution, 4)[:, :, 0] > 0.5
     alpha = largest_component(coverage).astype(np.float32)
-    green, blue = highlight_thresholds(args.resolution, alpha > 0.5)
+    quality, relit, front_dark = analyze_monotonicity(masks, alpha > 0.5, args.monotonic_tolerance)
+    quality.update(schema="pmx4ue.face-sdf-sweep.v1", model_faces=args.model_faces,
+                   angles_degrees=np.linspace(0.0, 180.0, args.frames).tolist(),
+                   policy=args.monotonic_policy, review_reason=args.review_reason,
+                   status="blocked_nonmonotonic" if quality["requires_review"] and args.monotonic_policy == "reject"
+                          else "candidate_visual_pending", visual_accepted=False)
+    for name, channel in (("RelitLost", relit), ("FrontUnlit", front_dark), ("A_FaceMask", alpha)):
+        save_rgba(output_dir / f"debug_{name}.png", np.stack((channel, channel, channel, np.ones_like(alpha)), axis=2))
+    quality["mask_sha256"] = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(masks_dir.glob("*.png"))}
+    (output_dir / "sweep_quality.json").write_text(json.dumps(quality, indent=2), encoding="utf-8")
+    if quality["status"] == "blocked_nonmonotonic":
+        raise RuntimeError("First-shadow encoding discards relit face regions. Inspect sweep_quality.json and debug_RelitLost.png; adapt masks or explicitly review a first_shadow approximation.")
+    red = shadow_threshold_from_masks(masks)
+    green, blue = (highlight_thresholds(args.resolution, alpha > 0.5) if args.highlight_mode == "legacy_uv_ellipses"
+                   else (np.zeros_like(alpha), np.zeros_like(alpha)))
     rgba = np.stack((red, green, blue, alpha), axis=2)
     output_path = output_dir / output_name
     save_rgba(output_path, rgba)
@@ -326,7 +354,14 @@ def main() -> None:
         save_rgba(output_dir / f"debug_{name}.png", preview)
 
     report = {
-        "schema": "mmd2ue.face-sdf.v1",
+        "schema": "pmx4ue.face-sdf-bake.v2",
+        "encoding": ENCODING,
+        "model_faces": args.model_faces,
+        "settings": vars(args),
+        "source_blend_sha256": hashlib.sha256(Path(bpy.data.filepath).read_bytes()).hexdigest(),
+        "texture_sha256": hashlib.sha256(output_path.read_bytes()).hexdigest(),
+        "sweep_quality": quality,
+        "visual_accepted": False,
         "blender_version": bpy.app.version_string,
         "source_blend": bpy.data.filepath,
         "source_object": source.name,

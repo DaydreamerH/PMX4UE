@@ -1,7 +1,14 @@
 {
-  "schema": "pmx4ue.delivery.v1",
+  "schema": "pmx4ue.delivery.v2",
   "project": "D:/YourProject/YourProject.uproject",
   "scope": ["materials"],
+  "material_review_contract": 1,
+  "material_acceptance": "static_lookdev",
+  "material_features": {
+    "eye_layers": {"status": "pending", "slots": [], "reason": "", "evidence": ["face_design"], "effect": "eye_layers_ab", "observations": {"geometry_layers": "", "highlight_shadow": "", "side_view": ""}, "next_action": "Inspect real eye geometry, UV and painted highlights; implement layered behavior or a justified single-layer alternative"},
+    "hair_clumps": {"status": "pending", "slots": [], "reason": "", "evidence": ["face_design"], "effect": "hair_highlight", "observations": {"uv_direction": "", "clump_shape": "", "view_light_response": ""}, "next_action": "Inspect strand UV/masks; compare highlight off/on and front/oblique views, not only hair color"},
+    "stocking_edge": {"status": "pending", "slots": [], "reason": "", "evidence": ["face_design"], "effect": "stocking_edge_ab", "observations": {"surface_layers": "", "edge_color": "", "highlight_response": ""}, "next_action": "Verify actual sock/skin geometry; separate edge-color and highlight tests without assuming transmission"}
+  },
   "assets": [
     {"id": "mesh", "role": "mesh", "path": "/Game/PMX4UE/Character/base/Mesh/SK_Character", "sha256": "REPLACE_WITH_CURRENT_FILE_HASH", "evidence": ["base_build"], "compatibility_note": "Fill actual slot-order/skeleton relationship to selected material instances"},
     {"id": "hair_material", "role": "material", "path": "/Game/PMX4UE/Character/lookdev/Materials/MI_Hair", "sha256": "REPLACE_WITH_CURRENT_FILE_HASH", "evidence": ["material_build", "validation"], "compatibility_note": "Fill actual target slot and preview override index"}
@@ -10,10 +17,47 @@
     {"id": "base_build", "kind": "run", "path": "D:/YourProject/Saved/PMX4UE/Character/base/runs/REPLACE_ue-build.json", "sha256": "REPLACE"},
     {"id": "material_build", "kind": "run", "path": "D:/YourProject/Saved/PMX4UE/Character/lookdev/runs/REPLACE_material-build.json", "sha256": "REPLACE"},
     {"id": "validation", "kind": "material_validation", "path": "D:/YourProject/Saved/PMX4UE/Character/lookdev/ue_validation.json", "sha256": "REPLACE"},
-    {"id": "comparison", "kind": "capture", "path": "D:/YourProject/Saved/PMX4UE/Character/lookdev/material_previews/v1/material_preview.json", "sha256": "REPLACE"}
+    {"id": "comparison", "kind": "capture", "path": "D:/YourProject/Saved/PMX4UE/Character/lookdev/material_previews/v1/material_preview.json", "sha256": "REPLACE"},
+    {"id": "face_design", "kind": "review", "path": "D:/YourProject/PMX4UE/characters/Character/material-design.md", "sha256": "REPLACE"},
+    {"id": "face_texture_check", "kind": "face_sdf_texture", "path": "D:/YourProject/Saved/PMX4UE/Character/lookdev/face_sdf_texture_check.json", "sha256": "REPLACE"}
   ],
   "effects": [
-    {"id": "hair_highlight", "slots": ["REPLACE_ACTUAL_SLOT"], "status": "pending", "implementation": "", "comparison_required": true, "image_sha256": [], "images_opened": false, "reviewer": "", "observation": "", "next_action": "Inspect source UV/masks, implement candidate and compare under matching cameras/lights"}
+    {"id": "hair_highlight", "slots": ["REPLACE_ACTUAL_SLOT"], "status": "pending", "implementation": "", "comparison_required": true, "image_sha256": [], "images_opened": false, "reviewer": "", "observation": "", "next_action": "Inspect source UV/masks, implement candidate and compare under matching cameras/lights"},
+    {"id": "face_shadow", "slots": ["REPLACE_ACTUAL_FACE_SLOT"], "status": "pending", "implementation": "", "comparison_required": true, "image_sha256": [], "images_opened": false, "reviewer": "", "observation": "", "next_action": "Complete chosen face shading after baseline and before static material delivery; compare front/left/right lighting"}
   ],
+  "face_shading": [
+    {
+      "slots": ["REPLACE_ACTUAL_FACE_SLOT"],
+      "method": "sdf",
+      "status": "pending",
+      "reason": "Fill model-specific face shading goal and choice",
+      "evidence": ["face_design"],
+      "effect": "face_shadow",
+      "texture_asset": "/Game/PMX4UE/Character/lookdev/Textures/T_Character_FaceSDF",
+      "texture_audit": "face_texture_check",
+      "light_tests": {"front": "REPLACE_IMAGE_SHA256", "left": "REPLACE_IMAGE_SHA256", "right": "REPLACE_IMAGE_SHA256"},
+      "sweep_review": {
+        "images_opened": false,
+        "reviewer": "",
+        "observations": {"nose_cheeks": "", "mouth": "", "uv_seams": "", "transition": "", "nonmonotonicity": ""},
+        "samples": [
+          {"angle_degrees": -90, "image_sha256": "REPLACE_LEFT90"},
+          {"angle_degrees": -60, "image_sha256": "REPLACE_LEFT60"},
+          {"angle_degrees": -30, "image_sha256": "REPLACE_LEFT30"},
+          {"angle_degrees": 0, "image_sha256": "REPLACE_FRONT"},
+          {"angle_degrees": 30, "image_sha256": "REPLACE_RIGHT30"},
+          {"angle_degrees": 60, "image_sha256": "REPLACE_RIGHT60"},
+          {"angle_degrees": 90, "image_sha256": "REPLACE_RIGHT90"}
+        ]
+      },
+      "runtime_status": "pending_animation",
+      "next_action": "After first usable material baseline, inspect face UV/axes and bake or adapt the face shadow texture",
+      "resume_when": "Baseline captured; complete before static material delivery, no animation prerequisite"
+    }
+  ],
+  "scene_effects": {
+    "outline": {"status": "pending", "method": "outline", "effect": "outline_ab", "reason": "", "evidence": [], "runtime_binding": "", "game_validation": {"status": "pending", "reason": "Runtime not tested", "next_action": "Test occlusion, distance/LOD, motion, lighting, multi-instance and isolated rendering cost"}, "next_action": "Review silhouette/mesh normals, build and attach candidate in Open World preview; compare on/off"},
+    "rim": {"status": "pending", "method": "depth_rim", "effect": "rim_ab", "reason": "", "evidence": [], "runtime_binding": "", "game_validation": {"status": "pending", "reason": "Runtime not tested", "next_action": "Check SceneDepth occlusion, light direction, character overlap, temporal stability and rendering cost"}, "next_action": "Choose depth-rim or material lighting algorithm; test scene attachment, stencil and on/off lighting cases"}
+  },
   "dispositions": {}
 }

@@ -10,6 +10,7 @@ built when the material map declares them.
 from __future__ import annotations
 
 import unreal
+from ue_face_sdf_nodes import angular_threshold
 
 from ue_context import (
     BuildError,
@@ -330,14 +331,12 @@ def create_master(ctx, texture_map):
     face_forward_dot = expression(material, unreal.MaterialExpressionDotProduct, -2760, 1620)
     connect(light_normalized, "", face_forward_dot, "A")
     connect(face_forward_normalized, "", face_forward_dot, "B")
-    face_forward_half = expression(material, unreal.MaterialExpressionMultiply, -2540, 1620)
-    connect(face_forward_dot, "", face_forward_half, "A")
-    safe_set(face_forward_half, "const_b", 0.5)
-    face_forward_remap = expression(material, unreal.MaterialExpressionAdd, -2320, 1620)
-    connect(face_forward_half, "", face_forward_remap, "A")
-    safe_set(face_forward_remap, "const_b", 0.5)
-    face_light_atten = expression(material, unreal.MaterialExpressionOneMinus, -2100, 1620)
-    connect(face_forward_remap, "", face_light_atten, "")
+    face_side_dot = expression(material, unreal.MaterialExpressionDotProduct, -2760, 1760)
+    connect(light_normalized, "", face_side_dot, "A")
+    connect(face_left_normalized, "", face_side_dot, "B")
+    # Baker stores angle/pi, not (1-cos(angle))/2. Head-plane projections
+    # also prevent sun elevation from changing the horizontal shadow phase.
+    face_light_atten = angular_threshold(material, face_forward_dot, face_side_dot)
 
     face_uv0 = expression(material, unreal.MaterialExpressionTextureCoordinate, -3420, 1880)
     safe_set(face_uv0, "coordinate_index", 0)
@@ -373,9 +372,6 @@ def create_master(ctx, texture_map):
     connect(face_sdf_flip_v, "", face_sdf_v, "Alpha")
     face_u_mirror = expression(material, unreal.MaterialExpressionOneMinus, -2760, 1880)
     connect(face_u, "", face_u_mirror, "")
-    face_side_dot = expression(material, unreal.MaterialExpressionDotProduct, -2760, 1760)
-    connect(light_normalized, "", face_side_dot, "A")
-    connect(face_left_normalized, "", face_side_dot, "B")
     face_side_positive = expression(material, unreal.MaterialExpressionSaturate, -2540, 1760)
     connect(face_side_dot, "", face_side_positive, "")
     face_side = expression(material, unreal.MaterialExpressionCeil, -2320, 1760)

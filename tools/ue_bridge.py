@@ -5,7 +5,7 @@ CAPABILITIES = {
     "physics": ("PmxSkirtTools", ("inspect_physics_mesh", "build_experiment", "build_physics_blueprint", "test_experiment")),
     "workflow": ("WorkflowTools", ("configure_physics_blueprint", "test_motion", "begin_preview_window", "set_preview_resolution")),
     "retarget": ("RetargetTools", ("inspect_retarget_pose",)),
-    "visual": ("AgentMCPTools", ("align_viewport_to_camera",)),
+    "visual": ("AgentMCPTools", ("frame_preview_subject", "capture_visible_editor_viewport")),
     "materials": ("AgentMCPTools", ("inspect_material_compile",)),
 }
 

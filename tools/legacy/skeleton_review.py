@@ -33,7 +33,7 @@ def resolved_roles(configured: dict | None = None) -> dict:
                                                     for name, parent in rehome.items()):
             raise ValueError(f"{side}.rehome_before_delete must map bone names to bone names")
         roles[side]["rehome_before_delete"] = rehome
-        for key in ("upper_twist_branches", "forearm_twist_branches"):
+        for key in ("upper_twist_branches", "forearm_twist_branches", "shoulder_helpers"):
             values = provided.get(key) or []
             if not isinstance(values, list) or not all(isinstance(value, str) and value for value in values):
                 raise ValueError(f"{side}.{key} must be a list of bone names")
@@ -83,13 +83,15 @@ def analyze_audit(audit: dict, configured_roles: dict | None = None) -> dict:
 
         shoulder = names["shoulder"]
         shoulder_path = _path(bones, roles["torso"], arm)
-        helpers = [name for name in (names["shoulder_pre"], names["shoulder_post"]) if name in bones]
+        helpers = sorted({name for name in [names["shoulder_pre"], names["shoulder_post"], *names["shoulder_helpers"]] if name in bones})
         weighted_helpers = [name for name in helpers if _weighted(bones[name])]
         if shoulder_path is None or shoulder not in shoulder_path:
             shoulder_state = "unresolved_naming_or_hierarchy"
             issues.append(f"{side}: cannot establish torso -> shoulder -> upper arm")
         elif shoulder_path == [roles["torso"], shoulder, arm]:
-            shoulder_state = "direct_single_shoulder_chain"
+            shoulder_state = "residual_shoulder_helpers" if helpers else "direct_single_shoulder_chain"
+            if helpers:
+                issues.append(f"{side}: direct main chain still has shoulder helpers: {helpers}")
         else:
             shoulder_state = "intermediate_bones_in_shoulder_chain"
             issues.append(f"{side}: shoulder chain contains intermediate bones: {shoulder_path}")
@@ -118,6 +120,13 @@ def analyze_audit(audit: dict, configured_roles: dict | None = None) -> dict:
         "retarget_structure": "direct_chain_candidate" if ready else "manual_review_required",
         "arms": arms,
         "shoulders": shoulders,
+        "ue_fk_proposal": {
+            "goal": "clean_ue_fk", "shoulder_strategy": "branch_helpers",
+            "arms": "optimize" if any("intermediate" in row["status"] for row in arms.values()) else "review_direct_chain",
+            "shoulders": "optimize" if any("intermediate" in row["status"] for row in shoulders.values()) else "review_direct_chain",
+            "rule": "Weighted twists remain as branches; P/C dependencies do not imply keeping them in the main path. IK endpoints are not hierarchy edits.",
+            "scope": "UE FK retargeting only; PMX control animation compatibility is not required. Unknown mappings remain blocked.",
+        },
         "issues": issues,
         "ignored_metadata_groups": [name for name in (audit.get("unmatched_weight_groups") or []) if name in IMPORTER_METADATA_GROUPS],
         "bone_references_checked": bool(audit.get("bone_references_checked")),

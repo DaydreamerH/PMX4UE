@@ -72,6 +72,11 @@ def main():
     if profile.get("reviewed") is not True:
         raise RuntimeError("Rig profile requires hierarchy/root/chain review")
     target, source = profile["target"], profile.get("source")
+    from ue_skeleton_guard import guard
+    target_mesh = unreal.load_asset(target["mesh"])
+    if not isinstance(target_mesh, unreal.SkeletalMesh):
+        raise RuntimeError("Missing target mesh")
+    guard(config, target_mesh, "ik")
     specs = [target] + ([source] if source else [])
     paths = [s["asset"] for s in specs] + ([profile["retargeter"]] if source else [])
     namespace = config["paths"]["ue_root"] + "/"
