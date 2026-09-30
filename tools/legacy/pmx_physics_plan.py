@@ -29,8 +29,10 @@ def make_plan(inventory, profile, mesh):
     require(type(rest_only) is bool, "rest_only must be boolean")
     require(rest_only or (isinstance(profile.get("test_animation"), str) and profile["test_animation"].startswith("/Game/")),
             "A real target-skeleton test animation is required, or explicitly choose rest_only")
-    require(not rest_only or (not profile.get("test_animation") and not settings["performance_test"]["enabled"]),
-            "rest_only requires empty animation and disabled performance; cannot pass movement acceptance")
+    require(not rest_only or not profile.get("test_animation"),
+            "rest_only requires empty animation; cannot pass movement acceptance")
+    require(profile.get("performance_test", {}).get("enabled") is True,
+            "Physics requires explicit performance_test.enabled=true, including rest_only static simulation")
     require(profile.get("cross_partition_collision") == "none", "Only explicitly independent partitions are supported; use special-requirements prompt")
     require(profile.get("cross_partition_reason"), "Document why cross-partition collisions are disabled")
     variant = profile["variant"]
@@ -172,7 +174,7 @@ def make_plan(inventory, profile, mesh):
         rest_only=rest_only, animation=profile.get("test_animation", ""), rest_blueprint=f"{asset_root}/ABP_Rest_{variant}",
         simulation=settings["simulation"], performance_test=settings["performance_test"],
         performance_controls=dict(synchronous=f"{asset_root}/ABP_SyncControl_{variant}",
-                                  no_physics=f"{asset_root}/ABP_NoPhysicsControl_{variant}") if settings["performance_test"]["enabled"] else {},
+                                  no_physics=f"{asset_root}/ABP_NoPhysicsControl_{variant}"),
         walk_blueprint="" if rest_only else f"{asset_root}/ABP_Walk_{variant}", partitions=manifests,
         notes=["Native Chaos approximates Bullet limits/springs; not an exact PMX solver",
                "No cross-partition proxies, thickness additions or garment avoidance"])

@@ -2,6 +2,8 @@
 
 每个角色在材质设计时明确脸部槽及阴影方案。默认角色级 lookdev 中，脸部阴影是必须处理的目标；SDF 是可选实现路线。用户已明确要求 SDF 时，应完成 SDF；换算法或缩减范围须说明差异并取得已有授权支持。不能把源包没有 SDF、配置标 optional 或缺动画当作无限期跳过的理由。
 
+若用户已认可某一版本的脸部观感，先按 [观感基线与响应选择](face-sdf-lookdev.md) 记录并复现该版本；不能未经同条件看图，就用“严格角度更正确”为由替换其材质响应。贴图真实编码和响应公式分开登记，非线性美术响应需要独立材质版本及验证适配。
+
 ## 执行时点
 
 1. 源数据审核时识别脸部几何、槽、UV、正面和左右方向，记录 SDF 候选或替代方案。
@@ -17,10 +19,10 @@
 
 ```powershell
 & "<Blender>" --background "<当前导出对应的角色.blend>" --python-exit-code 1 --python tools/blender_face_sdf_probe.py -- --face-slot "<实际脸部槽>" --output "<新产物目录>/face_probe.json"
-& "<Blender>" --background "<当前导出对应的角色.blend>" --python-exit-code 1 --python tools/legacy/blender_face_sdf.py -- --character-id "<角色ID>" --face-slot "<实际脸部槽>" --model-faces "+Y" --output-dir "<新的空目录>/SDF" --resolution 512
+& "<Blender>" --background "<当前导出对应的角色.blend>" --python-exit-code 1 --python tools/legacy/blender_face_sdf.py -- --character-id "<角色ID>" --face-slot "<实际脸部槽>" --model-faces "+Y" --output-dir "<新的空目录>/SDF" --resolution 1024
 ```
 
-`+Y`、512 只是命令示例。探测器的 `sdf_bake_ready` 只证明找到了面和 UV，不能证明选对脸壳、方向、无 UV 重叠或光照输出有效。agent 要读数据、查看 UV/几何再决定参数；无法满足现有脚本前提时适配脚本，留下可复现的命令和选择依据。
+`+Y` 只是朝向示例，须按本模型探测结果确定；**新烘焙固定 1024×1024**，脚本拒绝其它 `--resolution`。旧 512 数据可保留作历史证据，但不能充当新版本的 1024 输出。探测器的 `sdf_bake_ready` 只证明找到了面和 UV，不能证明选对脸壳、方向、无 UV 重叠或光照输出有效。agent 要读数据、查看 UV/几何再决定参数；无法满足现有脚本前提时适配脚本，留下可复现的命令和选择依据。
 
 烘焙器仍以最大 UV 连通区域作为候选脸部 mask；这不通用于任意模型，必须确认实际脸壳/鼻口 UV。通用固定椭圆鼻唇高光 G/B 现在默认关闭，只有实际 UV 审阅后才能明确启用兼容模式或实现本角色掩码。R 为方向光扫过时的阴影阈值，A 为应用范围。烘焙角度与 shader 解码、非单调受光检测和旧资产迁移见 [SDF 编码与质量检查](face-sdf-convention.md)，生成前必须阅读。其它编码须同时适配 shader 与数据检查，不直接套入本约定。
 
@@ -30,9 +32,11 @@
 & "<Blender>" --background --factory-startup --python-exit-code 1 --python tools/blender_face_sdf_audit.py -- --texture "<实际FaceSDF_RGBA.png>" --output "<新产物目录>/face_sdf_texture_check.json"
 ```
 
-此检查在 Blender 中按 Non-Color 读取实际图片，记录文件 SHA256、尺寸、RGBA 范围、A>0.5 有效覆盖内的 R 范围和不同阈值下受光比例。全白/全黑的恒定阴影阈值、无有效覆盖都会失败；只在脸部 mask 外有变化也会失败。A 全白或 G/B 常量不单独判失败，关闭高光时这可能合理。无最小像素门槛。结果 `data_valid_visual_pending` 只排除无效数据，不证明 UV 对应或阴影形状正确。
+此检查在 Blender 中按 Non-Color 读取实际图片，记录文件 SHA256、尺寸、RGBA 范围、A>0.5 有效覆盖内的 R 范围和不同阈值下受光比例。新版本继续前必须核对审计 `width=height=1024`，再确认 UE 实际绑定的是这张图且所需 mip 已驻留；仅有 1024 源 PNG 不证明视口实际用了该精度。全白/全黑的恒定阴影阈值、无有效覆盖都会失败；只在脸部 mask 外有变化也会失败。A 全白或 G/B 常量不单独判失败，关闭高光时这可能合理。结果 `data_valid_visual_pending` 只排除无效数据，不证明 UV 对应或阴影形状正确。
 
-数据检查自动读取同目录 v2 烘焙 manifest，核对纹理哈希并记录 `encoding`；旧图或手绘图必须先审核生成规则，再用 `--encoding` 与 `--encoding-evidence` 记录依据，不能凭灰度外观猜测。编码未知、与 Master 解码读回不一致时交付失败。已有资产不会自动更新，应由执行 agent 在获准工程中新建材质版本后验证。
+数据检查自动读取同目录 v2 烘焙 manifest，核对纹理哈希并记录 `encoding`；旧图或手绘图必须先审核生成规则，再用 `--encoding` 与 `--encoding-evidence` 记录依据，不能凭灰度外观猜测。通用 Master 的 SDF 交付要求 `linear_azimuth_v1` 烘焙，实际材质响应须从图连接读回并与声明一致；未知编码、未读回响应或非 1024×1024 新审计均失败。已有资产不会自动更新，应由执行 agent 在获准工程中新建材质版本后验证。
+
+这里的 `encoding` 只描述 PNG R 数据。用户认可的旧式 cosine-half 外观可使用同一张 `linear_azimuth_v1` 图配合有意不同的响应；不得把贴图伪标 `cosine_half_v1`。设置 `material_map.json` 的 `policies.face_sdf_light_response="cosine_half_art"` 后构建独立材质版本；验证结果的 `slot_audit.face_sdf_response` 必须读回相同选择，交付的 `face_shading[].light_response` 也必须一致。图/数据检查不代替 UE 编译、Lit 七角度看图及运行时验证。
 
 ## 绑定及静态效果验证
 
@@ -45,6 +49,8 @@
 静态成立后，按 [运行时 SDF](face-sdf-runtime.md) 执行 `face-sdf`，接入头骨驱动并另测转头/低头、Actor 转向和双实例隔离。该阶段修改材质方向输入并创建预览载体，**不会烘焙 SDF 贴图**。
 
 SDF 不能只看正面/左右端点：固定同一近景、姿态和候选，在头部坐标中从左侧到右侧采样至少七个不同角度（例如 -90/-60/-30/0/30/60/90°，相邻不超过45°）。观察转光是否连续、有无半脸直切、鼻口黑斑、突跳或左右翻转；必要时加密问题区间及背光/抬头测试。截图继续使用可见视口和默认 Open World 场景设置，不新增固定曝光或像素尺寸门槛。角度采样不是连续运动的动态验证。
+
+对已认可的观感，应先以 1024 原图及其已知材质响应在原机位/日光条件下复现，再做上述七角度；**不强制先做不同分辨率或公式的 A/B**。中间角度或仰角出现异常时定位具体原因并记录是否符合目标，不能既忽略异常，也不能擅自牺牲已认可正面效果。
 
 ## 交付清单 v2
 

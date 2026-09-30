@@ -1,4 +1,4 @@
-"""Angular decoder shared by new masters and small engine compile probes."""
+"""Build and read back the selected face SDF light response."""
 import math
 import unreal
 from ue_context import expression, connect, safe_set
@@ -21,19 +21,64 @@ def angular_threshold(material, forward_dot, left_dot, x=-2540, y=1620):
     return result
 
 
-def decoder_encoding(material):
-    """Read a generated decoder marker and its immediate arithmetic connection.
+def cosine_half_threshold(material, forward_dot, x=-2540, y=1620):
+    half = expression(material, unreal.MaterialExpressionMultiply, x, y)
+    connect(forward_dot, "", half, "A")
+    safe_set(half, "const_b", 0.5)
+    shifted = expression(material, unreal.MaterialExpressionAdd, x + 180, y)
+    connect(half, "", shifted, "A")
+    safe_set(shifted, "const_b", 0.5)
+    result = expression(material, unreal.MaterialExpressionOneMinus, x + 360, y)
+    connect(shifted, "", result, "")
+    safe_set(result, "desc", "Face SDF response: cosine_half_art; (1-dot(L,Forward))/2")
+    return result
 
-    This is a version/readback check, not a proof of every upstream UV/basis link.
+
+def response_readback(material):
+    """Verify the node feeding both SDF thresholds, not just a present marker.
+
+    Does not prove upstream face axes, texture UV or the compiled visual result.
     """
     if not material:
         return None
     lib = unreal.MaterialEditingLibrary
-    for node in lib.get_material_expressions(material):
-        if (isinstance(node, unreal.MaterialExpressionMultiply) and
-                str(node.get_editor_property("desc")).startswith("Face SDF: " + ENCODING + ";") and
-                abs(float(node.get_editor_property("const_b")) - 1 / math.pi) < 1e-6):
-            inputs = lib.get_inputs_for_material_expression(material, node)
-            if inputs and isinstance(inputs[0], unreal.MaterialExpressionArctangent2):
-                return ENCODING
+    nodes = lib.get_material_expressions(material)
+    markers = {"Face SDF threshold use: shadow": None,
+               "Face SDF threshold use: specular": None,
+               "Face SDF threshold use: specular inverse": None,
+               "Face SDF threshold use: inverse": None}
+    for node in nodes:
+        desc = str(node.get_editor_property("desc"))
+        if desc in markers:
+            if markers[desc] is not None:
+                return None
+            markers[desc] = node
+    if any(node is None for node in markers.values()):
+        return None
+    def first(node):
+        inputs = lib.get_inputs_for_material_expression(material, node)
+        return inputs[0] if inputs else None
+    shadow = first(markers["Face SDF threshold use: shadow"])
+    specular = first(markers["Face SDF threshold use: specular"])
+    inverse = first(markers["Face SDF threshold use: inverse"])
+    specular_inverse = first(markers["Face SDF threshold use: specular inverse"])
+    if (shadow is None or shadow != specular or shadow != inverse or
+            specular_inverse != markers["Face SDF threshold use: inverse"]):
+        return None
+    desc = str(shadow.get_editor_property("desc"))
+    if (isinstance(shadow, unreal.MaterialExpressionMultiply) and
+            desc.startswith("Face SDF: " + ENCODING + ";") and
+            abs(float(shadow.get_editor_property("const_b")) - 1 / math.pi) < 1e-6 and
+            isinstance(first(shadow), unreal.MaterialExpressionArctangent2)):
+        return ENCODING
+    if (isinstance(shadow, unreal.MaterialExpressionOneMinus) and
+            desc.startswith("Face SDF response: cosine_half_art;") and
+            isinstance(first(shadow), unreal.MaterialExpressionAdd)):
+        shifted = first(shadow)
+        half = first(shifted)
+        if (abs(float(shifted.get_editor_property("const_b")) - 0.5) < 1e-6 and
+                isinstance(half, unreal.MaterialExpressionMultiply) and
+                abs(float(half.get_editor_property("const_b")) - 0.5) < 1e-6 and
+                isinstance(first(half), unreal.MaterialExpressionDotProduct)):
+            return "cosine_half_art"
     return None

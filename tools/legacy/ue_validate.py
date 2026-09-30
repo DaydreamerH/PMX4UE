@@ -26,7 +26,7 @@ from mmd2ue_core import TEXTURE_PARAMETER_NAMES  # noqa: E402
 from ue_context import BuildContext  # noqa: E402
 from ue_material_instances import material_asset_name  # noqa: E402
 from material_input_policy import effective_scalars
-from ue_face_sdf_nodes import decoder_encoding
+from ue_face_sdf_nodes import response_readback
 
 UNARY_CLASSES = {
     "MaterialExpressionSaturate",
@@ -131,9 +131,10 @@ def main() -> None:
 
     slots_audit = []
     try:
-        master_sdf_encoding = decoder_encoding(master)
+        master_sdf_response = response_readback(master)
     except Exception:
-        master_sdf_encoding = None  # Missing readback is not a verified convention.
+        master_sdf_response = None  # Missing readback is not a verified response.
+    requested_sdf_response = ctx.material_map.get("policies", {}).get("face_sdf_light_response", "linear_azimuth_v1")
     for index, entry in enumerate(ctx.slot_entries()):
         slot_name = entry["slot"]
         instance_path = f"{root}/{ctx.names['instance_prefix']}_{material_asset_name(slot_name)}"
@@ -150,6 +151,8 @@ def main() -> None:
         except Exception:
             parent = None
         parent_is_master = parent is not None and master is not None and parent.get_path_name() == master.get_path_name()
+        if parent_is_master and entry["textures"].get("face_sdf") and master_sdf_response != requested_sdf_response:
+            violations.append(f"{slot_name}: face SDF response readback {master_sdf_response!r} does not match requested {requested_sdf_response!r}")
         route = ctx.special_kind_for_slot(slot_name) or "master"
         parent_assets = ctx.material_map.get("parent_assets", {})
         builtin_names = {"master": "master_asset", "stocking": "stocking_asset", "cloth": "cloth_asset",
@@ -217,7 +220,7 @@ def main() -> None:
             "declared_route": route,
             "effective_textures": effective,
             "effective_scalars": scalar_readback,
-            "face_sdf_encoding": master_sdf_encoding if parent_is_master else None,
+            "face_sdf_response": master_sdf_response if parent_is_master else None,
             "input_audit": input_audit,
         })
 

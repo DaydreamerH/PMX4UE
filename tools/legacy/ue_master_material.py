@@ -10,7 +10,7 @@ built when the material map declares them.
 from __future__ import annotations
 
 import unreal
-from ue_face_sdf_nodes import angular_threshold
+from ue_face_sdf_nodes import angular_threshold, cosine_half_threshold
 
 from ue_context import (
     BuildError,
@@ -334,9 +334,14 @@ def create_master(ctx, texture_map):
     face_side_dot = expression(material, unreal.MaterialExpressionDotProduct, -2760, 1760)
     connect(light_normalized, "", face_side_dot, "A")
     connect(face_left_normalized, "", face_side_dot, "B")
-    # Baker stores angle/pi, not (1-cos(angle))/2. Head-plane projections
-    # also prevent sun elevation from changing the horizontal shadow phase.
-    face_light_atten = angular_threshold(material, face_forward_dot, face_side_dot)
+    # Bake encoding is independent of the selected light-response curve.
+    response = ctx.material_map.get("policies", {}).get("face_sdf_light_response", "linear_azimuth_v1")
+    if response == "linear_azimuth_v1":
+        face_light_atten = angular_threshold(material, face_forward_dot, face_side_dot)
+    elif response == "cosine_half_art":
+        face_light_atten = cosine_half_threshold(material, face_forward_dot)
+    else:
+        raise BuildError(f"Unsupported face_sdf_light_response: {response}")
 
     face_uv0 = expression(material, unreal.MaterialExpressionTextureCoordinate, -3420, 1880)
     safe_set(face_uv0, "coordinate_index", 0)
@@ -394,7 +399,8 @@ def create_master(ctx, texture_map):
     face_shadow_softness = expression(material, unreal.MaterialExpressionScalarParameter, -1880, 2040)
     safe_set(face_shadow_softness, "parameter_name", "FaceShadowSmoothness")
     safe_set(face_shadow_softness, "default_value", 0.045)
-    face_shadow_raw = smooth_threshold(material, face_sdf_shadow, face_light_atten, face_shadow_softness, -1660, 1820)
+    face_shadow_raw = smooth_threshold(material, face_sdf_shadow, face_light_atten, face_shadow_softness, -1660, 1820,
+                                       marker="Face SDF threshold use: shadow")
     face_sdf_controlled_light = expression(material, unreal.MaterialExpressionLinearInterpolate, -100, 1780)
     connect(half_lambert_sat, "", face_sdf_controlled_light, "A")
     connect(face_shadow_raw, "", face_sdf_controlled_light, "B")
@@ -426,10 +432,13 @@ def create_master(ctx, texture_map):
     face_spec_softness = expression(material, unreal.MaterialExpressionScalarParameter, -1660, 2320)
     safe_set(face_spec_softness, "parameter_name", "FaceSpecSmoothness")
     safe_set(face_spec_softness, "default_value", 0.015)
-    face_spec_first = smooth_threshold(material, face_spec_upper, face_light_atten, face_spec_softness, -1440, 2140)
+    face_spec_first = smooth_threshold(material, face_spec_upper, face_light_atten, face_spec_softness, -1440, 2140,
+                                       marker="Face SDF threshold use: specular")
     one_minus_face_atten = expression(material, unreal.MaterialExpressionOneMinus, -1440, 2480)
+    safe_set(one_minus_face_atten, "desc", "Face SDF threshold use: inverse")
     connect(face_light_atten, "", one_minus_face_atten, "")
-    face_spec_second = smooth_threshold(material, face_spec_lower, one_minus_face_atten, face_spec_softness, -1220, 2480)
+    face_spec_second = smooth_threshold(material, face_spec_lower, one_minus_face_atten, face_spec_softness, -1220, 2480,
+                                        marker="Face SDF threshold use: specular inverse")
     face_spec_area = expression(material, unreal.MaterialExpressionMultiply, 180, 2260)
     connect(face_spec_first, "", face_spec_area, "A")
     connect(face_spec_second, "", face_spec_area, "B")

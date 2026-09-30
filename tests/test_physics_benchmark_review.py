@@ -6,7 +6,7 @@ import unittest
 from contextlib import redirect_stdout
 from io import StringIO
 
-from tools.review_physics_benchmark import main, review
+from tools.review_physics_benchmark import main, review, require_scoped_budget
 
 
 def fixture():
@@ -42,6 +42,27 @@ class PhysicsBenchmarkReviewTests(unittest.TestCase):
         data = fixture()
         data["tests"][1]["p99_ms"] = 22
         self.assertEqual(self.check(data)["status"], "candidate_below_budget")
+
+    def test_benchmark_budget_and_viewport_are_stage_gates(self):
+        data = fixture()
+        with self.assertRaisesRegex(ValueError, "viewport"):
+            require_scoped_budget(self.check(data))
+        data["viewport_size"] = [1920, 1080]
+        require_scoped_budget(self.check(data))
+        data["tests"][1]["p99_ms"] = 22
+        with self.assertRaisesRegex(ValueError, "candidate_below_budget"):
+            require_scoped_budget(self.check(data))
+
+    def test_pipeline_requires_synchronous_comparison(self):
+        data = fixture()
+        data["viewport_size"] = [1920, 1080]
+        self.assertEqual(review(data, "Candidate", "Control", 0,
+                                additional_controls=("SynchronousControl",))["status"], "invalid_measurement")
+        data["input_hashes"]["/Game/SynchronousControl"] = "c"
+        row = data["tests"][0]
+        data["tests"].extend(dict(row, case="SynchronousControl", blueprint="/Game/SynchronousControl") for _ in range(3))
+        self.assertEqual(review(data, "Candidate", "Control", 0,
+                                additional_controls=("SynchronousControl",))["status"], "measured_scope_pass")
 
     def test_bad_control_not_solver_failure(self):
         data = fixture()

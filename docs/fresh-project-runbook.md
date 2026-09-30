@@ -12,6 +12,10 @@ Windows 构建启动前，阅读[环境参考：UBT 跟踪日志与沙箱](../sk
 
 ## 执行顺序
 
+目标图可直接随 PMX 存于素材目录。材质设计前按 [目标图建档](target-image-lookdev.md) 主动发现并记录重要区域，后续按标签检索；未提供单独图片路径不等于没有目标图，无适用图不阻塞流程。
+
+完整角色任务先按 [多智能体协作规程](agent-collaboration.md) 分配独立分析、专项实现和关键审阅，按宿主可用能力/成本选择执行者。骨架定版、实际导入、IK/物理构建依赖顺序不因分工改变；UE 操作和性能测试统一调度，主智能体整合共享配置及证据。
+
 所有阶段通过 `python pmx4ue.py run --config <工作单> --stage <阶段>` 预览，加 `--execute` 才执行。先用 `init` 生成配置，再 `doctor` 和 `capabilities`：前者查路径，后者在 UE 中验证实际加载接口，不能互相替代。
 
 | 阶段 | agent 要完成的判断/产物 |
@@ -21,7 +25,7 @@ Windows 构建启动前，阅读[环境参考：UBT 跟踪日志与沙箱](../sk
 | skeleton-plan → skeleton-apply（决策选择优化时） | upper-only，保留有权重扭转骨；计划/导出记录对应新 FBX，后续 IK/物理使用其导入 mesh |
 | material-draft → 逐材质族设计 → material-check | 按 material-families.md 设计专用图/共享函数/Pass 与局部验收；覆盖真实槽、纹理/UV/通道、父路由，不把建议或基础贴色当最终效果 |
 | ue-build → ue-validate → material-compile | 新 namespace 导入；槽/参数/纹理检查，再实际 RHI 材质编译；此时视觉仍 pending |
-| material-preview → agent 视觉审核 | 自有可见编辑器直接加载 Open World 日光地图（不另建/保存预览地图），组件材质变体，固定视角、按需多光照，默认仅 Lit；Unlit/WorldNormal 仅在排错时定点补单张；等待角色贴图 mip 驻留和真实 PNG，记录尺寸但不以尺寸判定清晰度；填写 material-review；无动画也可执行 |
+| material-preview → agent 视觉审核 | 自有可见编辑器直接加载 Open World 日光地图（不另建/保存预览地图）；模板原光只作环境锚点，所有角色先用**角色正面左侧 45° 来光**，按实际前向和模板太阳初始 yaw 换算，不能直接写 `yaw_offset=45` 或从背后照；确认此光下材质正常后再开新运行转光。组件材质变体默认仅 Lit；Unlit/WorldNormal 仅在排错时定点补单张；等待角色贴图 mip 驻留和真实 PNG，记录尺寸但不以尺寸判定清晰度；填写 material-review；无动画也可执行 |
 | 脸部阴影专项（首组基线后、材质交付前） | 按 face-shading-workflow.md 生成并检查真实 SDF、绑定和三方向光照，或验证替代方案；Neutral 及关闭开关保持未完成；无需动画 |
 | scene-effects-build → material-preview（逐项候选） | 按 scene-effects-workflow.md 审阅描边/边缘光，构建、实际挂载、同条件开关对照；不采用须有依据，不能只有资产或默认关闭 |
 | face-sdf（已选择 SDF 路线且静态通过后） | 此入口只接入驱动，不生成贴图；审核头骨、双轴、槽与 provider，生成独立材质/预览 BP；动画跟随按 face-sdf-runtime.md 单独验收 |
@@ -29,15 +33,16 @@ Windows 构建启动前，阅读[环境参考：UBT 跟踪日志与沙箱](../sk
 | ik → 姿态采集/模型与配对方案 → retarget-pose → 新进程重载 | 双侧真实不同骨架，角色语义驱动；详见 agent-retarget-workflow.md |
 | animation-export（有动作时） | 用审核后的 RTG 输出新动画，保留源 root-lock/轨道；再看目标角色动作 |
 | physics-inspect → physics-plan → physics-build → physics-test | 独立 PA/ABP；新进程静止/移动/低频/卡顿测试；看衣物与碰撞 |
-| performance（有动作时） | 三轮交替无物理/同步/候选、真实视口、退出码、哈希和独立验收报告 |
+| performance（静态和动态均必做） | 三轮交替无物理/同步/候选、真实视口、退出码、哈希和独立验收报告；静态结果不得代替动态 |
+| delivery-check → 用户确认 → 引用审计 → 旧资产清理 | 交付先列准确保留组合与证据，用户确认后用 `tools/asset_retirement_plan.py` 只读列旧版候选；查 UE 硬/软/管理引用并对准确列表单独请求删除批准。批准前不删除；批准后通过 UE 资产系统清理并复验最终组合，见 `docs/final-asset-handoff.md` |
 
 `draft_profiles.py --config <工作单>` 要求已有 manifest 和 physics inventory。骨名映射来自导入元数据，不猜日英对应；重复 PMX 名被剔除并要求适配。优化后的骨骼仍须与 UE inspection 对照映射。分区依据 PMX 关节与 mask，不加裙子/外套代理碰撞或避让。
 
 ## 动作的两条分支
 
-只有 PMX：物理档案设 `rest_only=true`、`test_animation=""`、`performance_test.enabled=false`，可完成静止 PA/ABP 和静止测试。报告只能为 `rest_measured_movement_pending`。不能宣称走跑、急停、根运动或游戏性能已验证。
+只有 PMX：物理档案设 `rest_only=true`、`test_animation=""`、`performance_test.enabled=true`，可完成静止 PA/ABP、静止数值测试和静态性能对照。数值报告仍为 `rest_measured_movement_pending`；即便静态跑分达标，也不能宣称走跑、急停、根运动或游戏性能已验证。
 
-有源动画：复制 `templates/animation_export.example.json`，核实 Source/Target mesh、RTG、源动作列表；填 `reviewed=true` 与工作单 `pmx4ue.animation_export_profile`，运行 `animation-export`。输出目录必须空且在本次 namespace 内。工具校验源/目标 Skeleton 和 RTG 配对、时长/数量、输入资产哈希。导出完成不代表视觉通过。新物理版本设 `rest_only=false` 和输出动画路径，不覆盖之前 rest-only 资产。
+有源动画：复制 `templates/animation_export.example.json`，核实 Source/Target mesh、RTG、源动作列表；填 `reviewed=true` 与工作单 `pmx4ue.animation_export_profile`，运行 `animation-export`。输出目录必须空且在本次 namespace 内。工具校验源/目标 Skeleton 和 RTG 配对、时长/数量、输入资产哈希。导出完成不代表视觉通过。新物理版本设 `rest_only=false`、`performance_test.enabled=true` 和输出动画路径，不覆盖之前 rest-only 资产；重新测动态性能。
 
 ## 持续移动的物理候选
 
@@ -47,7 +52,7 @@ Windows 构建启动前，阅读[环境参考：UBT 跟踪日志与沙箱](../sk
 
 ## 性能和验收
 
-启用 `performance_test` 至少三轮、每轮计时至少 20 秒，默认 1920×1080、平均≥70FPS、P99≤16.67ms。每项回读 `t.MaxFPS 200`。采集器用新 PIE 窗口并设置实际 viewport 大小，不把 HighResShot 图片大小冒充跑分尺寸。截图在计时后；记录离屏、动态分辨率/比例设置，viewport 不是内部 shading 分辨率。
+静态和动态物理均必须启用 `performance_test`，至少三轮、每轮计时至少 20 秒，默认 1920×1080、平均≥70FPS、P99≤16.67ms。每项回读 `t.MaxFPS 200`。采集器用新 PIE 窗口并设置实际 viewport 大小，不把 HighResShot 图片大小冒充跑分尺寸。截图在计时后；记录离屏、动态分辨率/比例设置，viewport 不是内部 shading 分辨率。`physics-test` 的定步长 60/30/15Hz 验证稳定性，不构成真实渲染 FPS 证据；`performance_review.json` 无效、超预算或实际视口小于目标时，performance 阶段失败并保留数据用于迭代。
 
 必须读取 `performance_review.json`；控制超预算时先分析公共开销，不把候选平均 FPS 高于 60 当作通过。无物理和同步控制同样重复三轮。采集依赖生成的 plan 和新进程数值报告，哈希失配/退出非零/帧率不一致不能验收。单角色 PIE 不等于打包、多角色、LOD 或 CharacterMovement 集成。
 

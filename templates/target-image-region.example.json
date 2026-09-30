@@ -1,0 +1,12 @@
+{
+  "id": "stocking_edge_front",
+  "bbox_normalized": null,
+  "tags": ["stocking"],
+  "features": ["edge_thickness", "specular"],
+  "priority": "high",
+  "observation": "REPLACE_WITH_VISIBLE_FEATURES_AFTER_OPENING_ORIGINAL_IMAGE",
+  "material_slots": [],
+  "view_and_lighting": "REPLACE_WITH_VISIBLE_VIEW_POSE_AND_LIGHTING_OR_UNKNOWN",
+  "limitations": "REPLACE_WITH_OCCLUSION_RESOLUTION_AND_UNOBSERVABLE_PROPERTIES",
+  "intended_use": "REPLACE_WITH_MATERIAL_DESIGN_OR_RENDER_COMPARISON_TASK"
+}

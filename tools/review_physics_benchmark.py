@@ -15,10 +15,20 @@ def positive(value):
             and math.isfinite(value) and value > 0)
 
 
+def require_scoped_budget(review_result):
+    """Reject an invalid, over-budget or undersized run without claiming game approval."""
+    if review_result.get("status") != "measured_scope_pass":
+        raise ValueError("Physics benchmark did not meet budget: " + str(review_result.get("status")))
+    if review_result.get("viewport_target_met") is not True:
+        raise ValueError("Physics benchmark viewport is below the requested target size")
+
+
 def review(report, candidate, control, exit_code, repeats=3, target_size=(1920, 1080),
-           minimum_average_fps=70., maximum_p99_ms=1000/60):
+           minimum_average_fps=70., maximum_p99_ms=1000/60, additional_controls=()):
     if candidate == control or repeats < 3 or any(not positive(v) for v in target_size):
         raise ValueError("Use distinct candidate/control, >=3 repeats and positive target dimensions")
+    if len({candidate, control, *additional_controls}) != 2 + len(additional_controls):
+        raise ValueError("All benchmark cases must be distinct")
     if not positive(minimum_average_fps) or not positive(maximum_p99_ms):
         raise ValueError("Performance budgets must be finite and positive")
     errors = []
@@ -54,7 +64,7 @@ def review(report, candidate, control, exit_code, repeats=3, target_size=(1920, 
     if not isinstance(hashes, dict):
         hashes = {}
     selected = {}
-    for name in (control, candidate):
+    for name in (control, candidate, *additional_controls):
         cases = [r for r in rows if isinstance(r, dict) and r.get("case") == name]
         selected[name] = cases
         if len(cases) < repeats:
@@ -76,11 +86,11 @@ def review(report, candidate, control, exit_code, repeats=3, target_size=(1920, 
                 errors.append(prefix + "frame_time_count_disagree")
             if row.get("blueprint") not in identities:
                 errors.append(prefix + "asset_identity_missing")
-    if selected[control] and selected[candidate]:
-        if selected[control][0].get("blueprint") == selected[candidate][0].get("blueprint"):
-            errors.append("control_is_candidate_asset")
-        if len(selected[control]) != len(selected[candidate]):
-            errors.append("unbalanced_control_candidate_repeats")
+    if all(selected.values()):
+        if len({cases[0].get("blueprint") for cases in selected.values()}) != len(selected):
+            errors.append("benchmark_cases_share_asset")
+        if len({len(cases) for cases in selected.values()}) != 1:
+            errors.append("unbalanced_benchmark_repeats")
 
     status = "invalid_measurement"
     summaries = {}
@@ -95,6 +105,7 @@ def review(report, candidate, control, exit_code, repeats=3, target_size=(1920, 
                   "measured_scope_pass")
     return dict(
         schema="pmx4ue.physics_benchmark_review.v1", status=status, errors=errors,
+        simulation_scope=report.get("simulation_scope", "unknown"),
         candidate=candidate, control=control, summary=summaries,
         budget=dict(minimum_average_fps=minimum_average_fps, maximum_p99_ms=maximum_p99_ms),
         viewport_size=viewport, requested_viewport_size=list(target_size),

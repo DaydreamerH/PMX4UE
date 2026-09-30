@@ -1,5 +1,6 @@
 import hashlib
 import json
+import struct
 from pathlib import Path
 import tempfile
 import unittest
@@ -10,11 +11,17 @@ from tools.face_shading_delivery import review_face_shading
 from tools.face_sdf_texture_contract import summarize_pixels, verify_texture_report
 
 
+def png_header(width, height):
+    return (b"\x89PNG\r\n\x1a\n" + struct.pack(">I", 13) + b"IHDR" +
+            struct.pack(">II", width, height))
+
+
 class FaceShadingTests(unittest.TestCase):
     def fixture(self):
         entry = dict(slots=["Face"], method="sdf", status="reviewed", reason="UV-reviewed face shadow",
                      evidence=["design"], effect="face_shadow", texture_audit="sdf_audit",
                      texture_asset="/Game/Character/Textures/SDF", runtime_status="pending_animation",
+                     light_response="linear_azimuth_v1",
                      light_tests=dict(front="a", left="b", right="c"))
         entry["sweep_review"] = dict(images_opened=True, reviewer="fixture",
             observations={k: "Reviewed fixture" for k in
@@ -23,18 +30,19 @@ class FaceShadingTests(unittest.TestCase):
                      zip((-90, -60, -30, 0, 30, 60, 90), "bdeafgc")])
         profile = dict(face_shading=[entry], effects=[dict(id="face_shadow", slots=["Face"], status="reviewed",
                                                         image_sha256=list("abcdefg"))])
-        slots = {"Face": dict(declared_route="master", face_sdf_encoding="linear_azimuth_v1", effective_scalars={"FaceMode": 1.0},
+        slots = {"Face": dict(declared_route="master", face_sdf_response="linear_azimuth_v1", effective_scalars={"FaceMode": 1.0},
                              input_audit=[dict(role="face_sdf", source="declared",
                                               import_source_sha256="hash",
                                               actual="/Game/Character/Textures/SDF.SDF")])}
-        reports = {"design": ("review", None), "sdf_audit": ("face_sdf_texture", {"encoding": "linear_azimuth_v1"})}
+        reports = {"design": ("review", None), "sdf_audit": ("face_sdf_texture", {"encoding": "linear_azimuth_v1", "width": 1024, "height": 1024})}
         cases = {h: {("capture", "Candidate", "FaceClose", light, "Lit")}
                  for h, light in zip("abcdefg", ("Front", "Left", "Right", "Left60", "Left30", "Right30", "Right60"))}
         return profile, slots, reports, cases
 
     def review(self, profile, slots, reports, cases, debts=None):
         issues = []
-        with patch("tools.face_shading_delivery.verify_texture_report", return_value=("texture.png", "hash")):
+        with patch("tools.face_shading_delivery.verify_texture_report", return_value=("texture.png", "hash")), \
+                patch("tools.face_shading_delivery.png_dimensions", return_value=(1024, 1024)):
             review_face_shading(profile, slots, debts or {}, reports, cases, issues.append, {})
         return issues
 
@@ -113,12 +121,27 @@ class FaceShadingTests(unittest.TestCase):
 
     def test_old_unknown_or_mismatched_decoder_is_not_accepted(self):
         p, s, r, c = self.fixture()
-        s["Face"]["face_sdf_encoding"] = "cosine_half_v1"
-        self.assertTrue(any("encoding mismatch" in x for x in self.review(p, s, r, c)))
+        s["Face"]["face_sdf_response"] = "cosine_half_art"
+        self.assertTrue(any("response mismatch" in x for x in self.review(p, s, r, c)))
+        p["face_shading"][0]["light_response"] = "cosine_half_art"
+        self.assertEqual(self.review(p, s, r, c), [])
+        s["Face"]["face_sdf_response"] = None
+        self.assertTrue(any("missing graph readback" in x for x in self.review(p, s, r, c)))
         r["sdf_audit"][1]["encoding"] = "unspecified"
         self.assertTrue(any("encoding is unknown" in x for x in self.review(p, s, r, c)))
         del r["sdf_audit"]
         self.assertTrue(any("texture invalid" in x for x in self.review(p, s, r, c)))
+
+    def test_delivery_rejects_wrong_source_resolution(self):
+        p, s, r, c = self.fixture()
+        r["sdf_audit"][1]["width"] = 512
+        self.assertTrue(any("1024x1024" in x for x in self.review(p, s, r, c)))
+        p, s, r, c = self.fixture()
+        issues = []
+        with patch("tools.face_shading_delivery.verify_texture_report", return_value=("texture.png", "hash")), \
+                patch("tools.face_shading_delivery.png_dimensions", return_value=(512, 512)):
+            review_face_shading(p, s, {}, r, c, issues.append, {})
+        self.assertTrue(any("1024x1024" in x for x in issues))
 
     def test_neutral_input_and_disabled_branch_cannot_be_reviewed_sdf(self):
         p, s, r, c = self.fixture()
@@ -192,14 +215,14 @@ class FaceShadingTests(unittest.TestCase):
                           implementation="SDF candidate", comparison_required=False,
                           comparison_reason="Lighting sweep test fixture")
             texture = root / "sdf.png"
-            texture.write_bytes(b"texture fixture")
+            texture.write_bytes(png_header(1024, 1024))
             sha = hashlib.sha256(texture.read_bytes()).hexdigest()
             slots["Face"]["slot"] = "Face"
             slots["Face"]["input_audit"][0].update(expected="/Game/Character/Textures/SDF.SDF",
                                                      import_source_sha256=sha)
             audit = dict(summarize_pixels([(0, 0, 0, 1), (1, 0, 0, 1)]),
                          schema="pmx4ue.face-sdf-texture.v1", texture=str(texture), sha256=sha,
-                         encoding="linear_azimuth_v1")
+                         encoding="linear_azimuth_v1", width=1024, height=1024)
             capture = dict(captures=[dict(case="Candidate", camera={"name": "FaceClose"},
                 light={"name": next(iter(rows))[3]}, mode="Lit", image={"path": h + ".png", "sha256": h})
                 for h, rows in cases.items()], input_assets={"game_package_sha256": fingerprints})

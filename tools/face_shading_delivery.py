@@ -1,7 +1,7 @@
 """Face shading closure for delivery v2; data/traceability, never beauty scoring."""
 import math
 from itertools import product
-from tools.face_sdf_texture_contract import verify_texture_report
+from tools.face_sdf_texture_contract import png_dimensions, verify_texture_report
 
 
 def review_sweep(entry, effect, capture_cases, issue, label):
@@ -109,6 +109,9 @@ def review_face_shading(profile, slot_rows, debts, reports, capture_cases, issue
             path, sha = verify_texture_report(audit)
             source_sha = sha
             evidence_hashes[path] = sha
+            if (audit.get("width") != 1024 or audit.get("height") != 1024 or
+                    png_dimensions(path) != (1024, 1024)):
+                issue(f"Face SDF delivery requires a 1024x1024 audited source: {label}")
             if audit.get("encoding") not in {"linear_azimuth_v1", "cosine_half_v1"}:
                 issue(f"Face SDF encoding is unknown; audit the bake convention instead of guessing: {label}")
         except (ValueError, OSError, TypeError) as error:
@@ -125,9 +128,11 @@ def review_face_shading(profile, slot_rows, debts, reports, capture_cases, issue
             if not source_sha or bound.get("import_source_sha256") != source_sha:
                 issue(f"Face SDF texture audit does not match the bound texture import source: {slot}")
             if row.get("declared_route") == "master":
-                if (not isinstance(audit, dict) or not row.get("face_sdf_encoding") or
-                        row.get("face_sdf_encoding") != audit.get("encoding")):
-                    issue(f"Face SDF bake/decoder encoding mismatch or missing readback; build and validate a new master: {slot}")
+                response = row.get("face_sdf_response")
+                selected = entry.get("light_response")
+                if (not isinstance(audit, dict) or audit.get("encoding") != "linear_azimuth_v1" or
+                        response not in {"linear_azimuth_v1", "cosine_half_art"} or selected != response):
+                    issue(f"Face SDF bake/light response mismatch or missing graph readback; build and validate a new master: {slot}")
                 active = row.get("effective_scalars", {}).get("FaceMode")
                 if not isinstance(active, (int, float)) or not math.isfinite(active) or active <= 0:
                     issue(f"Face SDF branch is disabled or lacks scalar readback: {slot}")

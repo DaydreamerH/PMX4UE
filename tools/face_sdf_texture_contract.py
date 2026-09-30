@@ -7,7 +7,21 @@ These checks do not judge UV correspondence or the rendered shadow shape.
 import hashlib
 import json
 import math
+import struct
 from pathlib import Path
+
+
+def png_dimensions(path):
+    """Read the source PNG header, independently of the audit's width/height."""
+    with Path(path).open("rb") as handle:
+        header = handle.read(24)
+    if (len(header) != 24 or header[:8] != b"\x89PNG\r\n\x1a\n" or
+            header[12:16] != b"IHDR"):
+        raise ValueError("Face SDF source is not a PNG with an IHDR")
+    width, height = struct.unpack(">II", header[16:24])
+    if not width or not height:
+        raise ValueError("Face SDF PNG has invalid dimensions")
+    return width, height
 
 
 def summarize_pixels(pixels):

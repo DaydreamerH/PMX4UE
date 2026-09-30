@@ -1,0 +1,10 @@
+{
+  "schema": "pmx4ue.retirement-candidates.v1",
+  "project": "D:/YourProject/YourProject.uproject",
+  "candidate_namespace": "/Game/PMX4UE/Character/obsolete_v1",
+  "protected_assets": ["/Game/PMX4UE/Character/base/Mesh/SK_Character"],
+  "candidates": [
+    {"path": "/Game/PMX4UE/Character/obsolete_v1/Materials/MI_Old",
+     "reason": "Replaced by the user-approved material variant; verify all UE referencers first"}
+  ]
+}

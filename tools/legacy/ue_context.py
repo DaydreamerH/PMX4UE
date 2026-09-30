@@ -166,9 +166,11 @@ def component_mask(material, source, output: str, channels: str, x: int, y: int)
     return node
 
 
-def smooth_threshold(material, value, threshold, softness, x: int, y: int):
+def smooth_threshold(material, value, threshold, softness, x: int, y: int, marker: str = ""):
     """Hermite smoothstep(value, threshold-softness, threshold+softness)."""
     edge_min = expression(material, unreal.MaterialExpressionSubtract, x, y)
+    if marker:
+        safe_set(edge_min, "desc", marker)
     connect(threshold, "", edge_min, "A")
     connect(softness, "", edge_min, "B")
     delta = expression(material, unreal.MaterialExpressionSubtract, x + 220, y)

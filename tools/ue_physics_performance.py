@@ -21,15 +21,18 @@ plan_path = Path(os.environ["PMX_PHYSICS_PLAN"])
 plan = json.loads(plan_path.read_text(encoding="utf-8"))
 fingerprint = hashlib.sha256(json.dumps(plan, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 numerical = json.loads(Path(os.environ["PMX_PHYSICS_TEST_REPORT"]).read_text(encoding="utf-8"))
-if plan.get("rest_only") or plan.get("status") != "ready" or not plan["performance_test"]["enabled"]:
-    raise RuntimeError("A reviewed animated plan is required")
-if numerical.get("plan_sha256") != fingerprint or not numerical.get("status", "").startswith("numerically_measured"):
+if plan.get("status") != "ready" or not plan["performance_test"]["enabled"]:
+    raise RuntimeError("A reviewed physics plan with performance enabled is required")
+expected_numerical = ("rest_measured_movement_pending" if plan.get("rest_only") else
+                      "numerically_measured_visual_and_performance_pending")
+if numerical.get("plan_sha256") != fingerprint or numerical.get("status") != expected_numerical:
     raise RuntimeError("Numerical report does not match this plan")
 policy = plan["performance_test"]
 if policy["repeats"] < 3 or policy["seconds"] < 20:
     raise RuntimeError("Performance acceptance requires >=3 repeats and >=20 seconds")
 paths = dict(NoPhysics=plan["performance_controls"]["no_physics"],
-             SynchronousControl=plan["performance_controls"]["synchronous"], Candidate=plan["walk_blueprint"])
+             SynchronousControl=plan["performance_controls"]["synchronous"],
+             Candidate=plan["rest_blueprint"] if plan.get("rest_only") else plan["walk_blueprint"])
 names = list(paths)
 cases = names * policy["repeats"]
 run = "physics_performance"
@@ -65,14 +68,16 @@ camera.get_component_by_class(unreal.CameraComponent).set_field_of_view(55.)
 previous_cap = unreal.SystemLibrary.get_console_variable_float_value("t.MaxFPS")
 duration = float(policy["seconds"])
 report = dict(mode="rendered_PIE", quality_changes=False, map=world.get_path_name(),
+              simulation_scope="static_only" if plan.get("rest_only") else "animated_motion",
               camera_fov=55., rendering_mode="offscreen" if "renderoffscreen" in unreal.SystemLibrary.get_command_line().lower() else "windowed",
               seconds_per_case=duration, warmup_seconds=8, tests=[], previous_max_fps=previous_cap,
-              scope="One character, authored animation displacement and looping, camera follows reviewed anchor. Not packaged-game acceptance.")
+              scope=("One character at rest; movement/low-FPS response not tested." if plan.get("rest_only") else
+                     "One character, authored animation displacement and looping, camera follows reviewed anchor. Not packaged-game acceptance."))
 def digest_asset(path):
     filename = project / "Content" / (path.split('.')[0].removeprefix('/Game/') + '.uasset')
     return hashlib.sha256(filename.read_bytes()).hexdigest()
 
-dependencies = list(paths.values()) + [plan["mesh"], plan["animation"],
+dependencies = list(paths.values()) + [plan["mesh"]] + ([plan["animation"]] if plan["animation"] else []) + [
     body.get_skeletal_mesh_asset().get_editor_property("skeleton").get_path_name()] + [p["asset"] for p in plan["partitions"]]
 report["input_hashes"] = {p: digest_asset(p) for p in dependencies}
 report["plan_sha256"] = fingerprint

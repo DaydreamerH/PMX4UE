@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import numpy as np
 from face_sdf_convention import analyze_monotonicity, light_threshold
+from mmd2ue_core import validate_material_map
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -24,6 +25,12 @@ class FaceConventionTests(unittest.TestCase):
     def test_old_half_cosine_is_not_the_bakers_encoding(self):
         self.assertAlmostEqual(light_threshold(math.cos(math.pi/4), math.sin(math.pi/4)), .25)
         self.assertGreater(abs(.25 - (1-math.cos(math.pi/4))/2), .1)
+
+    def test_response_policy_rejects_unknown_mode(self):
+        mapping = {"slots": [], "profiles": {}, "policies": {"face_sdf_light_response": "guess"}}
+        self.assertIn("invalid_face_sdf_light_response", {i["code"] for i in validate_material_map(mapping)})
+        mapping["policies"]["face_sdf_light_response"] = "cosine_half_art"
+        self.assertNotIn("invalid_face_sdf_light_response", {i["code"] for i in validate_material_map(mapping)})
 
     def test_actual_material_helper_evaluates_same_math(self):
         # Execute the actual node-construction function with arithmetic nodes;
@@ -51,6 +58,69 @@ class FaceConventionTests(unittest.TestCase):
             for forward, left in ((1, 0), (0, 1), (0, -1), (-1, 0), (.3, -.8), (0, 0)):
                 self.assertAlmostEqual(evaluate(scope["angular_threshold"](None, forward, left)),
                                        light_threshold(forward, left))
+
+    def test_selected_response_graph_readback_requires_connected_thresholds(self):
+        class Node:
+            def __init__(self):
+                self.inputs, self.values = {}, {}
+            def get_editor_property(self, key):
+                return self.values.get(key, "")
+        class Multiply(Node): pass
+        class Add(Node): pass
+        class OneMinus(Node): pass
+        class Subtract(Node): pass
+        class Dot(Node): pass
+        class Abs(Node): pass
+        class Max(Node): pass
+        class Atan2(Node): pass
+        nodes = []
+        def expression(material, kind, x, y):
+            node = kind()
+            nodes.append(node)
+            return node
+        fake = SimpleNamespace(MaterialExpressionMultiply=Multiply, MaterialExpressionAdd=Add,
+            MaterialExpressionOneMinus=OneMinus, MaterialExpressionSubtract=Subtract,
+            MaterialExpressionDotProduct=Dot, MaterialExpressionAbs=Abs,
+            MaterialExpressionMax=Max, MaterialExpressionArctangent2=Atan2,
+            MaterialEditingLibrary=SimpleNamespace(get_material_expressions=lambda material: nodes,
+                get_inputs_for_material_expression=lambda material, node: list(node.inputs.values())))
+        ctx = SimpleNamespace(expression=expression,
+            connect=lambda source, out, target, pin: target.inputs.update({pin: source}),
+            safe_set=lambda node, key, value: node.values.update({key: value}))
+        scope = {}
+        with patch.dict("sys.modules", unreal=fake, ue_context=ctx):
+            exec(compile((ROOT/"tools/legacy/ue_face_sdf_nodes.py").read_text(), "helper", "exec"), scope)
+            def cosine_value(node):
+                if isinstance(node, Dot): return 0.3
+                if isinstance(node, Multiply): return cosine_value(node.inputs["A"]) * node.values["const_b"]
+                if isinstance(node, Add): return cosine_value(node.inputs["A"]) + node.values["const_b"]
+                if isinstance(node, OneMinus): return 1 - cosine_value(node.inputs[""])
+                raise AssertionError(type(node))
+            forward, left = Dot(), Dot()
+            for expected in ("linear_azimuth_v1", "cosine_half_art"):
+                nodes.clear()
+                selected = (scope["angular_threshold"](None, forward, left) if expected == "linear_azimuth_v1"
+                            else scope["cosine_half_threshold"](None, forward))
+                if expected == "cosine_half_art":
+                    self.assertAlmostEqual(cosine_value(selected), (1 - 0.3) / 2)
+                uses = []
+                for label, cls in (("shadow", Subtract), ("specular", Subtract), ("inverse", OneMinus)):
+                    node = expression(None, cls, 0, 0)
+                    node.values["desc"] = "Face SDF threshold use: " + label
+                    node.inputs["A"] = selected
+                    uses.append(node)
+                specular_inverse = expression(None, Subtract, 0, 0)
+                specular_inverse.values["desc"] = "Face SDF threshold use: specular inverse"
+                specular_inverse.inputs["A"] = uses[-1]
+                self.assertEqual(scope["response_readback"](object()), expected)
+                specular_inverse.inputs["A"] = Dot()
+                self.assertIsNone(scope["response_readback"](object()))
+                specular_inverse.inputs["A"] = uses[-1]
+                uses[1].inputs["A"] = Dot()
+                self.assertIsNone(scope["response_readback"](object()))
+                uses[1].inputs["A"] = selected
+                selected.values["desc"] = "wrong marker"
+                self.assertIsNone(scope["response_readback"](object()))
 
     def test_nonmonotonic_masks_are_measured_not_silently_accepted(self):
         stack = np.array([[[1, 1]], [[0, 1]], [[1, 0]]], dtype=bool)
@@ -84,3 +154,10 @@ class FaceConventionTests(unittest.TestCase):
         highlight = next(n for n in ast.walk(parser) if isinstance(n, ast.Call) and n.args and
                          isinstance(n.args[0], ast.Constant) and n.args[0].value == "--highlight-mode")
         self.assertEqual(next(k.value.value for k in highlight.keywords if k.arg == "default"), "disabled")
+        resolution = next(n for n in ast.walk(parser) if isinstance(n, ast.Call) and n.args and
+                          isinstance(n.args[0], ast.Constant) and n.args[0].value == "--resolution")
+        self.assertEqual(next(k.value.value for k in resolution.keywords if k.arg == "default"), 1024)
+        self.assertTrue(any(isinstance(n, ast.Compare) and isinstance(n.left, ast.Attribute) and
+                            n.left.attr == "resolution" and any(isinstance(c, ast.Constant) and c.value == 1024
+                                                                for c in n.comparators)
+                            for n in ast.walk(parser)))

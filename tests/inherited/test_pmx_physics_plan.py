@@ -31,6 +31,7 @@ def fixture():
     profile = dict(schema="mmd2ue.pmx-physics-profile.v1", reviewed=True, source_sha256="hash",
         mesh=mesh["mesh"], measurement_anchor="Pelvis", variant="Test_v1", asset_root="/Game/Char/Physics",
         test_animation="/Game/Char/Walk", allow_same_name_bones=True, bone_map={},
+        performance_test=dict(enabled=True),
         landmarks={n: n for n in names[:3]}, cross_partition_collision="none", cross_partition_reason="Reviewed isolated garments",
         partitions=[dict(name="Skirt", purpose="skirt", dynamic_ids=[2]), dict(name="Coat", purpose="coat", dynamic_ids=[3])],
         conversion=dict(reviewed=True, angular_spring_scale=10000, joint_damping_ratio=.7))

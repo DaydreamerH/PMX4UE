@@ -94,6 +94,8 @@ python pmx4ue.py install-plugin --config "characters/MyCharacter/character.json"
 
 ## 管理与拓展
 
-这是独立 Git 仓库。角色差异首先放角色配置；多角色可复用的能力进入工具或预设；引擎差异进入明确的适配层。实验先建分支/新资产版本，小提交记录证据。一个 agent 写 UE 资产，其它 agent 可并行分析文档/只读报告，避免多进程争抢工程。
+这是独立 Git 仓库。角色差异首先放角色配置；多角色可复用的能力进入工具或预设；引擎差异进入明确的适配层。实验先建分支/新资产版本，小提交记录证据。
+
+[多智能体协作规程](docs/agent-collaboration.md) 支持主智能体按需委派骨架审阅、材质专项、碰撞与性能分析。根据宿主实际能力和成本选择基础/专项/复杂执行者，不指定模型名称；独立文件可分工实现，UE 构建、资产写入、截图和性能测量统一排队。分工与结果用 `templates/agent-coordination.md`、`templates/agent-task.md` 保存。运行器不自动调度或计费；没有子智能体工具时单智能体仍可完成流程。
 
 本目录没有包含 UE 引擎、mmd_tools 或第三方角色素材；它们遵循各自许可。`PROVENANCE.json` 是本项目工具的来源记录，不是第三方素材再分发授权。

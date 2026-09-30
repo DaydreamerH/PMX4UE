@@ -362,15 +362,19 @@ def run(c, project, a, stage, execute=False, timeout=1800):
                 record["capture_sha256"] = {r["image"]["path"]: r["image"]["sha256"] for r in preview["captures"]}
                 record["asset_sha256"] = preview["input_assets"]["game_package_sha256"]
             if stage == "performance":
-                from tools.review_physics_benchmark import review
+                from tools.review_physics_benchmark import review, require_scoped_budget
                 raw = read(spec["outputs"][0])
-                policy = read(a / "physics_plan.json")["performance_test"]
+                plan = read(a / "physics_plan.json")
+                policy = plan["performance_test"]
+                require(raw.get("simulation_scope") == ("static_only" if plan.get("rest_only") else "animated_motion"),
+                        "Benchmark scope does not match physics plan")
                 verdict = review(raw, "Candidate", "NoPhysics", record["process_exit_code"],
                                  repeats=policy["repeats"], target_size=(policy.get("viewport_width", 1920), policy.get("viewport_height", 1080)),
-                                 minimum_average_fps=policy["minimum_average_fps"], maximum_p99_ms=policy["maximum_p99_ms"])
+                                 minimum_average_fps=policy["minimum_average_fps"], maximum_p99_ms=policy["maximum_p99_ms"],
+                                 additional_controls=("SynchronousControl",))
                 write(a / "performance_review.json", verdict)
                 record["performance_review"] = verdict
-                require(verdict["status"] != "invalid_measurement", "Invalid performance measurement; inspect performance_review.json")
+                require_scoped_budget(verdict)
             record.update(status="executed_needs_review", output_sha256={f: sha(f) for f in spec["outputs"]})
             if record.get("import_risks"):
                 record.update(status="executed_with_import_risks", production_accepted=False,

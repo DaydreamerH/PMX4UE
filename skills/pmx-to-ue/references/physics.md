@@ -31,15 +31,17 @@ mmd_tools 已把 PMX 排除掩码转换为允许位。仅当 A.mask 允许 B.gro
 
 mode 2、无绑定刚体、一根 UE 骨被多个动态刚体驱动、不对称角限、跨分区关节、重复 PMX 骨名、同骨多 shape 材质语义冲突等会阻止计划。先分析语义，在本仓库新增适配与回归测试；不要调小刚度绕过结构问题。mode 0 作为跟随动画的碰撞体/锚点，mode 1 作为动态驱动。
 
-没有同骨架动画时，设置 `rest_only=true`、空 `test_animation`、`performance_test.enabled=false`，生成静止 ABP 并测试；报告明确移动待验收。有源动作时先 `animation-export`，再建新动态版本。缺输入时不伪造走路动画或通过标记。
+没有同骨架动画时，设置 `rest_only=true`、空 `test_animation`、`performance_test.enabled=true`，生成静止 ABP、无物理和同步对照，先做静止数值与真实 PIE 静态性能测量；报告明确移动与游戏性能待验收。有源动作时先 `animation-export`，再建新动态版本并**重新跑动态性能**。静态跑分不能复用为动态通过；缺输入时不伪造走路动画或通过标记。`physics-plan` 对静态和动态都拒绝关闭性能的配置。
 
 ## 已有优化经验如何复用
+
+性能不足时先按 [物理性能优化决策手册](../../../docs/physics-optimization-playbook.md) 建立同条件基线，再逐项改动和判退。该手册只提供可迁移的判断顺序，不预设某个角色的参数。
 
 `draft_profiles.py` 提供候选 nonlinear 8 次 position iterations、60 Hz fixed time step。它不是每个模型的标准答案。旧配置不填 solver 时仍是同步 120 Hz / 16 次，便于兼容对照。
 
 进一步启用 `simulation.timing="deferred"` 必须 `accept_one_frame_latency=true`：使用前帧结果换取调度优势，明确接受一帧延迟后再用。不要用更松碰撞/降画质冒充纯性能优化。
 
-`performance` 的同场景对照：无物理 → 同步控制 → 候选，整组交替重复至少 3 次。每次设 `t.MaxFPS 200` 并回读；记录 VSync，结束恢复之前上限。不关闭用户会话。平均目标默认 ≥70 FPS，P99 ≤16.67ms；帧 cap、实际帧率、case 完整性、实际视口及进程退出均参与判定，输出 `performance_review.json`。
+`performance` 的同场景对照：无物理 → 同步控制 → 候选，整组交替重复至少 3 次。每次设 `t.MaxFPS 200` 并回读；记录 VSync，结束恢复之前上限。不关闭用户会话。平均目标默认 ≥70 FPS，P99 ≤16.67ms；帧 cap、实际帧率、case 完整性、实际视口及进程退出均参与判定，输出 `performance_review.json`。低于预算、测量无效或视口不足会使该阶段失败，保留原始报告供诊断；不能靠静态数值测试或小视口截图跳过。静态 pass 只覆盖静态求解开销，不代表走跑/根运动/多角色或打包游戏性能。
 
 数值测试通过、视觉认可、PIE 性能、打包游戏性能分别记录。项目可能被渲染/其它 GameThread 工作限制，先看无物理基线和线程耗时再改求解参数。原工程曾发生报告写完后编辑器退出崩溃，所以运行器仍以进程返回码判定执行失败，不吞错误。若复现，用自己的空白测试场景定位关闭时序，不修改用户生产场景。
 

@@ -32,7 +32,7 @@ def main():
         conversion=dict(reviewed=False, angular_spring_scale=10000, joint_damping_ratio=.7),
         solver=dict(position_iterations=8, fixed_time_step=1/60, use_linear_joint_solver=False),
         simulation=dict(timing="synchronous", accept_one_frame_latency=False, space="component", base_bone=""),
-        performance_test=dict(enabled=False, max_fps=200, seconds=60, repeats=3, viewport_width=1920, viewport_height=1080,
+        performance_test=dict(enabled=True, max_fps=200, seconds=60, repeats=3, viewport_width=1920, viewport_height=1080,
                               minimum_average_fps=70, maximum_p99_ms=1000/60),
         agent_review=dict(ambiguous_source_bone_names=ambiguous,
                           mapping_note="From importer metadata, must reconcile with skeleton optimization and UE inspection; no name guessing",

@@ -38,7 +38,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--output-name")
     parser.add_argument("--face-slot", default="Face")
-    parser.add_argument("--resolution", type=int, default=512)
+    parser.add_argument("--resolution", type=int, default=1024)
     parser.add_argument("--frames", type=int, default=17)
     parser.add_argument("--samples", type=int, default=32)
     parser.add_argument("--threshold", type=float, default=0.05)
@@ -48,7 +48,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--monotonic-tolerance", type=float, default=0.01)
     parser.add_argument("--review-reason", default="")
     parser.add_argument("--highlight-mode", choices=("disabled", "legacy_uv_ellipses"), default="disabled")
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if args.resolution != 1024:
+        parser.error("PMX4UE face SDF bake requires 1024x1024; preserve older outputs as legacy evidence")
+    return args
 
 
 def majority_filter(mask: np.ndarray, passes: int) -> np.ndarray:

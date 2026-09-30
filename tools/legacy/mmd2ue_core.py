@@ -645,6 +645,14 @@ def validate_material_map(normalized: dict) -> list[dict]:
     def issue(level, code, message):
         issues.append({"level": level, "code": code, "message": message})
 
+    policies = normalized.get("policies", {})
+    if not isinstance(policies, dict):
+        issue("error", "invalid_material_policies", "policies must be an object")
+        policies = {}
+    response = policies.get("face_sdf_light_response", "linear_azimuth_v1")
+    if response not in {"linear_azimuth_v1", "cosine_half_art"}:
+        issue("error", "invalid_face_sdf_light_response", f"unsupported face SDF light response: {response}")
+
     if not normalized.get("slots"):
         issue("error", "no_slots", "material map resolved to zero slots")
     seen = set()

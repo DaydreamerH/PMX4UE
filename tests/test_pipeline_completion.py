@@ -31,14 +31,24 @@ class PipelineCompletionTests(unittest.TestCase):
         plan = make_plan(inv, profile, mesh)
         self.assertTrue(plan["rest_only"])
         self.assertEqual(plan["walk_blueprint"], "")
-        self.assertEqual(plan["performance_controls"], {})
+        self.assertEqual(len(plan["performance_controls"]), 2)
 
-    def test_rest_only_rejects_movement_or_perf(self):
-        for changes in ({}, {"test_animation":"", "performance_test":{"enabled":True}}):
+    def test_rest_only_rejects_animation(self):
+        for changes in ({}, {"test_animation":"/Game/Other/Walk"}):
             args = fixture()
             args[1].update(rest_only=True, **changes)
             with self.assertRaisesRegex(ValueError, "rest_only"):
                 make_plan(*args)
+
+    def test_static_and_animated_plans_cannot_skip_performance(self):
+        for performance_test in ({}, {"enabled": False}):
+            for rest_only in (False, True):
+                args = fixture()
+                args[1]["performance_test"] = performance_test
+                args[1]["rest_only"] = rest_only
+                args[1]["test_animation"] = "" if rest_only else "/Game/Char/Walk"
+                with self.assertRaisesRegex(ValueError, "Physics requires explicit performance"):
+                    make_plan(*args)
 
     def test_base_bone_must_exist_and_be_nondynamic(self):
         for bone in ("Missing", "Skirt"):
