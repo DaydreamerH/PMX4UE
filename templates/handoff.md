@@ -16,6 +16,7 @@
 - 骨骼、材质、动态物理、碰撞过滤、性能各自验收状态：
 - 双侧手臂/肩链 skeleton_decision / 源 audit 与 blend 指纹 / 保留理由或 upper_only FBX 与导入证据 / IK、物理是否引用选定 mesh：
 - 材质 preview profile / 自有进程加载的 Open World 日光地图（不保存）/ capture report / A/B 图片 / material-review：
+- 截图保留：基线/当前候选/验收与故障 pin / 退役预览和不可再使用的历史报告 / 清理策略、外部引用扫描范围、计划指纹、用户授权与回执 / 释放体积及失败项：
 - material-design / 各族父图与构建脚本 / 未实现的高光、眼睛层次、袜类厚度、刘海/轮廓效果 / 当前质量阶段：
 - 材质截图是否实际打开、谁审核 / 未分类贴图处置 / 未满足的特征要求：
 - 实际 input_audit / material_debt / 缺资源关闭项的替代实验或用户批准范围：

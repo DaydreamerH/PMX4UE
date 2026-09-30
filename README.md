@@ -2,7 +2,24 @@
 
 **Agent 主导的 PMX → Unreal Engine 角色转换工作台。**
 
+PMX4UE 用于把 PMX 角色模型及其贴图、骨骼和物理数据，整理成 UE 工程中可继续开发的角色资产。它把导入、骨架整理、分类型材质、动画重定向和物理模拟串成可复用的工作流，让没有历史对话上下文的 agent 也能从素材出发，按模型差异处理并留下可追溯的结果。
+
 脚本负责可靠地读取、转换、构建和测量；agent 负责理解模型、参考资料、选择方案、看效果，以及在必要时修改脚本。它不是把所有模型塞进同一套参数的一键导入器。
+
+## 效果示例
+
+以下为用户提供的实际处理结果：使用 **GPT 6.1sol** 主导工作流，耗时约 **2–3 小时**，角色在 UE 日光场景中的渲染效果如下。耗时为本次案例记录，实际时间会随素材复杂度、运行环境及调整需求变化。
+
+![PMX4UE 角色转换与材质处理结果：UE 日光场景中的全身预览](docs/images/pmx-to-ue-example.png)
+
+## 角色处理过程
+
+1. **盘点素材**：读取 PMX、贴图、材质槽、骨骼和物理数据；如素材目录中有目标图，按脸部、头发、衣料、丝袜等区域建档，供后续调整参考。没有目标图也可继续。
+2. **整理骨架与导入**：确认单位和绑定姿态，梳理手臂、肩部主链，保留必要的带权重辅助骨，默认不清理腿骨；导出并导入独立的 UE 资产版本。
+3. **实现材质**：按实际模型分别处理脸部阴影/SDF、眼睛层次、头发高光、丝袜与织物反射，并接入描边、边缘光等适用效果，不只追求贴色正确。
+4. **配置动画与 IK**：建立语义骨链，分别规范源与目标骨架的 T-Pose，生成重定向配置；有源动画时验证实际动作，没有动画则明确保留动态待验项。
+5. **复现物理并优化**：依据 PMX 刚体、关节和碰撞规则配置头发、衣服等模拟；静止状态也测性能，有动画时再检查持续位移、低帧率和碰撞稳定性。
+6. **看图迭代与交付**：在默认 Open World 日光环境中做全身、局部及转光对照，参考可用目标图调整；交付明确的资产组合、验证记录与待办，并按授权清理无用截图和旧资产。
 
 当前源码发行版：**0.2.0**。首次迁移从 [START_HERE.md](START_HERE.md) 开始；可直接使用 [独立 agent 任务模板](templates/import-agent.md)。完整提交包含通用工具及案例记录，不含引擎、模型、动画或预编译插件。以用户指定的目标工程为准；已有同名原生节点时不要重复安装插件。
 
@@ -36,9 +53,9 @@ PMX4UE/
 
 最新执行要求：先做双侧手臂/肩链审阅与 skeleton_decision，再将选定 FBX 导入用于 IK/物理；preserve 不代表可以跳过审阅。描边/边缘光用 [场景效果闭环](docs/scene-effects-workflow.md) 的 scene-effects-build 与真实挂载对照；delivery v2 显式记录 face_shading 和 scene_effects。新增代码验证范围以 VERIFICATION 顶部为准，旧章节的实测状态不自动覆盖新版本。
 
-材质迭代新增 [小实验与交付规程](docs/material-iteration-and-delivery.md)：`material-preflight` 探测采样/API、`material-build` 复用网格构建新材质、`delivery-check` 复核版本组合与效果证据。逐槽实际输入读回、中性默认纹理和未完成效果记录防止串槽与无声降级。这些新增实现尚未运行测试或 UE 验证，不是新的视觉效果通过记录。
+材质迭代新增 [小实验与交付规程](docs/material-iteration-and-delivery.md)：`material-preflight` 探测采样/API、`material-build` 复用网格构建新材质、`delivery-check` 复核版本组合与效果证据。逐槽实际输入读回、中性默认纹理和未完成效果记录防止串槽与无声降级。自动测试和 UE 实测范围以 VERIFICATION 为准，工具检查通过不代表具体角色的视觉效果通过。
 
-材质视觉闭环见 [材质工作流](docs/agent-material-workflow.md)：`material-preview` 在自有新编辑器与隔离关卡完成固定视角 A/B 截图，不清理当前场景；图片完整与视觉认可分别记录。该新增采集路径仍待独立 UE 工程验证，见 `VERIFICATION.md`。
+材质视觉闭环见 [材质工作流](docs/agent-material-workflow.md)：`material-preview` 在自有新编辑器中直接加载默认 Open World 日光地图，完成固定视角 A/B 截图，不保存地图或清理用户当前场景；图片完整与视觉认可分别记录。当前采集路径的验证范围见 `VERIFICATION.md`。
 
 材质实现先看 [材质族设计](docs/material-families.md)：通用 Master 仅是基线，眼睛各层、头发、脸部、丝袜、织物、描边等按实际行为选择/编写专用实现。支持显式 stocking/cloth 构建路由与自定义父图注册；未知路由不再静默回退，专用图参数须与其实际接口一致。
 
@@ -89,7 +106,7 @@ python pmx4ue.py install-plugin --config "characters/MyCharacter/character.json"
 
 - 脚本：PMX/贴图盘点、厘米导出、骨骼审计及有证据的上半身优化、材质构建、IK 配置、PMX 刚体/关节/碰撞组转换、独立物理资产与测试 ABP、数值及 PIE 性能测试。
 - agent：材质槽与纹理语义、风格、骨骼角色和链条、重定向姿势、PMX 分区依据、特殊关节适配、视觉验收。可以修改脚本并补回归用例，而不是无限试参数。
-- PMX 不含走路动画。没有提供动画时使用 `rest_only=true`、空 `test_animation`、关闭性能测试，构建/测量静止物理；标记动态验收未完成。有动作后用 `animation-export` 创建同骨架新动画，再建新的动态物理版本。
+- PMX 不含走路动画。没有提供动画时使用 `rest_only=true`、空 `test_animation`，仍启用性能测试，构建/测量静止物理；标记动态验收未完成。有动作后用 `animation-export` 创建同骨架新动画，再建新的动态物理版本。
 - 支持边界与版本实测见 [VERIFICATION.md](VERIFICATION.md)。现有成功案例不是其它角色必然 60 FPS 的承诺。
 
 ## 管理与拓展
@@ -98,4 +115,4 @@ python pmx4ue.py install-plugin --config "characters/MyCharacter/character.json"
 
 [多智能体协作规程](docs/agent-collaboration.md) 支持主智能体按需委派骨架审阅、材质专项、碰撞与性能分析。根据宿主实际能力和成本选择基础/专项/复杂执行者，不指定模型名称；独立文件可分工实现，UE 构建、资产写入、截图和性能测量统一排队。分工与结果用 `templates/agent-coordination.md`、`templates/agent-task.md` 保存。运行器不自动调度或计费；没有子智能体工具时单智能体仍可完成流程。
 
-本目录没有包含 UE 引擎、mmd_tools 或第三方角色素材；它们遵循各自许可。`PROVENANCE.json` 是本项目工具的来源记录，不是第三方素材再分发授权。
+本目录不包含 UE 引擎、mmd_tools 或第三方角色源模型与贴图；它们遵循各自许可。README 中的效果图用于展示处理结果，不代表提供角色源素材。`PROVENANCE.json` 是本项目工具的来源记录，不是第三方素材再分发授权。

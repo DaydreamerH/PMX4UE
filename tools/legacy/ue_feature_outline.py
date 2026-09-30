@@ -118,7 +118,7 @@ def build(ctx: BuildContext) -> dict:
     distance_clamped = expression(material, unreal.MaterialExpressionMin, -490, 160)
     connect(distance_floor, "", distance_clamped, "A")
     connect(max_node, "", distance_clamped, "B")
-    width_scale = scalar(material, "OutlineWidthScale", options.get("width", 0.00095), -490, 320)
+    width_scale = scalar(material, "OutlineWidthScale", options.get("width", 0.0012), -490, 320)
     world_width = expression(material, unreal.MaterialExpressionMultiply, -260, 160)
     connect(distance_clamped, "", world_width, "A")
     connect(width_scale, "", world_width, "B")
@@ -178,9 +178,9 @@ def build(ctx: BuildContext) -> dict:
         raise RuntimeError("failed to save outline parent")
 
     prefix = ctx.names["instance_prefix"]
-    general = _build_instance(material, root, f"{prefix}_Outline", options.get("width", 0.00095))
-    face = _build_instance(material, root, f"{prefix}_Outline_Face", options.get("face_width", options.get("width", 0.00095)), float(bool(regions)))
-    hair = _build_instance(material, root, f"{prefix}_Outline_Hair", options.get("hair_width", 0.00072))
+    general = _build_instance(material, root, f"{prefix}_Outline", options.get("width", 0.0012))
+    face = _build_instance(material, root, f"{prefix}_Outline_Face", options.get("face_width", options.get("width", 0.0012)), float(bool(regions)))
+    hair = _build_instance(material, root, f"{prefix}_Outline_Hair", options.get("hair_width", 0.0012))
 
     report = {
         "status": "success",

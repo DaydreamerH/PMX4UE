@@ -1,0 +1,10 @@
+{
+  "schema": "pmx4ue.capture-retention.v1",
+  "project": "REPLACE_WITH_TARGET_UPROJECT",
+  "artifact_root": "REPLACE_WITH_SAVED_PMX4UE_CHARACTER_ROOT",
+  "retired_records": [
+    {"path": "REPLACE_WITH_OLD_CAPTURE_REPORT", "sha256": "REPLACE_WITH_CURRENT_HASH", "reason": "REPLACE_WITH_REPLACEMENT_AND_REVIEW_REASON"}
+  ],
+  "protected_paths": ["REPLACE_WITH_BASELINE_OR_CURRENT_PREVIEW_DIRECTORY"],
+  "external_reference_roots": ["REPLACE_WITH_CHARACTER_CONFIG_AND_REVIEW_DIRECTORY"]
+}

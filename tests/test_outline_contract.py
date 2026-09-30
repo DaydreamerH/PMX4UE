@@ -79,6 +79,41 @@ class OutlineTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 face_regions(bad)
 
+    def outline_width_expressions(self, options):
+        # Evaluate the actual builder's parameter expressions, without UE.
+        root = Path(__file__).resolve().parents[1]
+        tree = ast.parse((root/'tools/legacy/ue_feature_outline.py').read_text(encoding='utf-8-sig'))
+        build = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'build')
+        widths = {}
+        for node in ast.walk(build):
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
+                continue
+            if (node.func.id == 'scalar' and isinstance(node.args[1], ast.Constant)
+                    and node.args[1].value == 'OutlineWidthScale'):
+                key, expression = 'parent', node.args[2]
+            elif node.func.id == '_build_instance':
+                key = node.args[2].values[-1].value
+                expression = node.args[3]
+            else:
+                continue
+            widths[key] = eval(compile(ast.Expression(expression), '<actual outline width>', 'eval'),
+                               {'options': options})
+        return widths
+
+    def test_general_face_and_hair_default_to_wider_outline(self):
+        self.assertEqual(self.outline_width_expressions({}),
+                         {'parent': .0012, '_Outline': .0012,
+                          '_Outline_Face': .0012, '_Outline_Hair': .0012})
+
+    def test_explicit_widths_and_face_inheritance_remain_supported(self):
+        self.assertEqual(self.outline_width_expressions({'width': .002}),
+                         {'parent': .002, '_Outline': .002,
+                          '_Outline_Face': .002, '_Outline_Hair': .0012})
+        self.assertEqual(self.outline_width_expressions(
+            {'width': .002, 'face_width': .001, 'hair_width': .0008}),
+            {'parent': .002, '_Outline': .002,
+             '_Outline_Face': .001, '_Outline_Hair': .0008})
+
 
 if __name__ == '__main__':
     unittest.main()

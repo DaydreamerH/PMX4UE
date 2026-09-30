@@ -13,6 +13,7 @@ import time
 import traceback
 import unreal
 from outline_contract import outline_spec, outline_assets, outline_args, verify_outline_receipt
+from capture_retention import remove_native_duplicate
 
 from material_preview_contract import validate, capture_jobs, png_evidence, require, verify_environment_review, CapturePixelsError
 from ue_bridge import resolve, checked
@@ -362,6 +363,9 @@ class Preview:
                     stream.write(self.pending.read_bytes())
                 self.row["image"] = png_evidence(destination, self.row["viewport_width"], self.row["viewport_height"])
                 self.report["captures"].append(self.row)
+                self.persist()
+                self.row["native_copy_retention"] = remove_native_duplicate(
+                    self.project, self.pending, destination, self.token, self.row["image"]["sha256"])
                 self.persist()
                 self.index += 1
                 self.phase = "prepare"
