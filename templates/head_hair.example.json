@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "reviewed": false,
+  "review_evidence": "Replace with actual slot/head/bind-space calibration evidence; numerical defaults are placeholders.",
+  "provider": "pmx4ue",
+  "mesh": "/Game/PMX4UE/Example/v1/Mesh/SK_Example",
+  "destination": "/Game/PMX4UE/Example/v1/HeadHair",
+  "head_bone": "ACTUAL_HEAD_BONE",
+  "hair_slots": ["ACTUAL_BANGS_SLOT", "ACTUAL_HAIR_SLOT"],
+  "reference_up": [0, 0, 1],
+  "sphere_center_reference_cs": [0, 0, 0],
+  "highlight_mode": "head_band",
+  "band": {
+    "reviewed": false,
+    "review_evidence": "Only for head_band: actual per-slot mask/UV and sphere-center-relative height fit; not a matcap copied as atlas.",
+    "mask": "/Game/PMX4UE/Example/v1/Textures/T_ActualHairStrandMask",
+    "uv_channel": 0,
+    "height_cm": 0,
+    "width_cm": 1,
+    "view_shift_cm": 0,
+    "spec_normal_blend": 0
+  }
+}

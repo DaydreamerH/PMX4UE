@@ -24,7 +24,7 @@ STAGES = ("audit", "capabilities", "export", "skeleton-audit", "skeleton-review"
           "material-draft", "material-check", "ue-build", "ue-validate", "material-compile", "ik", "retarget-pose", "animation-export",
           "physics-inventory", "physics-inspect", "physics-plan", "physics-build",
           "physics-test", "performance")
-STAGES += ("face-sdf", "material-preview", "material-build", "material-preflight", "delivery-check", "scene-effects-build")
+STAGES += ("face-sdf", "head-hair", "material-preview", "material-build", "material-preflight", "delivery-check", "scene-effects-build")
 
 
 def read(path):
@@ -185,6 +185,11 @@ def recipe(c, project, a, stage):
         token = uuid.uuid4().hex
         env.update(PMX4UE_PREVIEW_PROFILE=str(inputs[0]), PMX4UE_OUTPUT=str(out), PMX4UE_PREVIEW_TOKEN=token)
         argv = ue(ROOT / "tools/ue_material_preview.py", pie=True, visible=True) + ["-PMX4UEPreview=" + token]
+    elif stage == "head-hair":
+        require(p.get("head_hair_profile"), "Set head_hair_profile after head/hair calibration review")
+        inputs = [Path(p["head_hair_profile"])]
+        env.update(PMX4UE_HEAD_HAIR_PROFILE=str(inputs[0]), PMX4UE_OUTPUT=str(out))
+        argv = ue(ROOT / "tools/ue_head_hair_workflow.py") + ["-AllowCommandletRendering"]
     elif stage == "face-sdf":
         require(p.get("face_sdf_profile"), "Set face_sdf_profile after face-axis review")
         inputs = [Path(p["face_sdf_profile"])]

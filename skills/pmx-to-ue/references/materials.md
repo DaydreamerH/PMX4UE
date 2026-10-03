@@ -26,6 +26,8 @@
 
 ## 按需效果
 
+有头发/刘海时先完整阅读 [hair-rendering-standard.md](../../../docs/hair-rendering-standard.md)，再读 [hair-bangs-workflow.md](../../../docs/hair-bangs-workflow.md)。以已核对的独立工程头发方案为默认设计：球形漫反射、头部空间高光带、干净距离场投影、刘海深度代理和受控眉眼补绘。保留主刘海 Opaque/Masked，不要求原层排除；补绘保留完整眼着色、原裁切、分眼 R/G 与前后关系。用 `templates/hair-assembly.md` 记录真实层/section/LOD 与运行时读回。`head-hair` 只复制头发图并接入球心/上轴，helper 不是完整装配；缺接口时做最小适配，不能默认 preserve 就交付。旧半透继续禁用，先小数据检查再少量日光 A/B，不重跑全角色。
+
 “按需”不代表默认不做：描边和边缘光都要在角色设计中有明确决策。完整阅读 [场景效果闭环](../../../docs/scene-effects-workflow.md)，使用主流水线的 scene-effects-build 构建选定候选，在自有日光预览实际挂载、截图比较，填写 delivery.scene_effects。用户要求的效果不能以 optional 为由省略；不适用时附模型证据和理由。
 
 脸部存在时先读 [脸部阴影执行流程](../../../docs/face-shading-workflow.md)。SDF 是算法选择，但脸部阴影不能无限期搁置：第一组基线图可用后开始，静态材质交付前完成真实贴图或验证替代方案。`face-sdf` 是运行时驱动接入，不生成贴图；烘焙和新数据检查工具的命令见该流程。交付 v2 的 `face_shading` 必填，不能将全白 Neutral 或关闭的开关当成效果实现。

@@ -40,6 +40,8 @@
 - 任务进度：`pending` / `running` / `done` / `failed`（done 只指本任务范围）：
 - 验收记录：`implemented` / `measured` / `agent_reviewed` / `user_approved`（逐项记录证据或 pending/failed，不互相推导）：
 - 产物与实际改动文件：
+- 审阅的准确资产组合及保存后重载来源（非“最新版本”）：
+- 实际打开的原图/目标区域清单、看图者；他人补录指纹时另列元数据编写者：
 - 完成标准逐项结果：
 - 原始证据及指纹：
 - 审阅对象、方法与发现（未审阅写 `pending`）：

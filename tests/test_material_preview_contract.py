@@ -46,6 +46,19 @@ class PreviewContractTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "remove legacy requested dimensions"):
             validate(p, "/Game/PMX4UE/Character/v1")
 
+    def test_hair_preview_opt_in_and_absolute_sun(self):
+        p = copy.deepcopy(self.profile)
+        p['cases'].append({'name': 'Hair', 'slots': [], 'head_hair_report': 'D:/Saved/head_hair.json'})
+        p['lights'].append({'name': 'Front45', 'pitch': -35, 'yaw': 225})
+        validate(p, '/Game/PMX4UE/Character/v1')
+        p['lights'][1]['yaw_offset'] = 0
+        with self.assertRaisesRegex(ValueError, 'not both'):
+            validate(p, '/Game/PMX4UE/Character/v1')
+        del p['lights'][1]['yaw_offset']
+        p['cases'][1]['head_hair_report'] = ''
+        with self.assertRaisesRegex(ValueError, 'built report path'):
+            validate(p, '/Game/PMX4UE/Character/v1')
+
     def test_material_preview_launches_visible_editor(self):
         c = {"pmx4ue": {"engine": "D:/Engine", "physics_profile": "physics.json",
                          "material_preview_profile": "preview.json", "material_preview_run": "v1"},
@@ -178,13 +191,13 @@ class PreviewContractTests(unittest.TestCase):
             "observations": {"sky": "visible", "ground": "visible", "character": "visible"}}
         validate(self.profile, "/Game/PMX4UE/Character/v1")
 
-    def test_daylight_rejects_legacy_lights_and_bad_position(self):
+    def test_daylight_rejects_unknown_lights_and_bad_position(self):
         p = copy.deepcopy(self.profile)
         p["lights"][0]["intensity"] = 6
         with self.assertRaisesRegex(ValueError, "retain template"):
             validate(p, "/Game/PMX4UE/Character/v1")
         p = copy.deepcopy(self.profile)
-        p["lights"].append({"name": "SideDaylight", "yaw": 90})
+        p["lights"].append({"name": "SideDaylight", "sun_yaw": 90})
         with self.assertRaisesRegex(ValueError, "Unknown daylight"):
             validate(p, "/Game/PMX4UE/Character/v1")
         self.profile["environment"]["model_location"] = [0, 0, float("nan")]

@@ -52,6 +52,19 @@
 - delivery.material_features：eye_layers / hair_clumps / stocking_edge 分别填真实槽、选择依据、专项 A/B 和区域观察；见 docs/material-quality-contract.md。不存在有据 N/A，存在却未实现记录 pending，而非整体贴色通过：
 - 静态与游戏验收范围：描边/边缘光需要测试遮挡、距离/LOD、运动、光向、多实例及开关成本；当前缺条件时写具体下一步，不能标 game_ready：
 
+## 头发与刘海专项
+
+先按 `docs/hair-rendering-standard.md` 的默认方案及 `docs/hair-bangs-workflow.md` 在静态交付前填写，并附 `templates/hair-assembly.md` 的实值副本，不因现有脚本只是候选而省略：
+
+- 后发/刘海实际槽、高光纹理与直发束 UV（通道、V 方向、缺数据的生成/替代方案）：
+- 球形宏观法线已有/新增/替代依据，球心与混合量，漫反射与高光法线分别如何选择：
+- HairUpWS 校准轴、每实例头骨驱动、光源方向来源，完整高光乘法链是否生效；静态与动态状态：
+- 若使用 head-hair：profile 与建档球心/上轴、shared driver 实例、component_overrides 读回、缺骨回退/双实例/当帧跟随报告；起点与视觉接受状态分别记录：
+- 刘海投影算法、实际脸部接收区域、额外层路由与深度规则，是否为近似：
+- 眉眼补绘采用/有据不采用/待实现，保留原不透明刘海、深度代理与实际额外层/sections、stencil 与前景过滤；若另选真正头发双 Pass 才说明原层排除：
+- 头部高光带的高度原点/宽度/视角/侧向弧度、发束调制或有据 UV 替代；眼补绘的源 AlphaScale/裁切阈值、本眼 R/G 和 frontmost 眼白、完整源着色读回：
+- 四项各自 effects ID、局部开关图、挂载读回、目标图差距、排序/overdraw/LOD 与性能待验项：
+
 ## 场景轮廓效果决策
 
 描边与边缘光分别填写：采用/不采用的模型或目标依据、候选算法及输入、独立材质路径、组件/后处理接入、开关对照计划。不因默认 features 为空或效果涉及场景就跳过；当前关卡不动，在自有 Open World 预览中实验。按 `docs/scene-effects-workflow.md`，对应交付 v2 的 scene_effects。

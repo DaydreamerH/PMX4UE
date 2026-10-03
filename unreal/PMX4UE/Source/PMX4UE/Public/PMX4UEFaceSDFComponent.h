@@ -41,6 +41,33 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category="Face SDF")
     bool bBasisValid = false;
 
+    // Optional hair output shares the SAME post-animation head sampling.
+    // Positions and axes below are imported REFERENCE component-space values.
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Head Hair")
+    bool bDriveHair = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Head Hair")
+    TArray<int32> HairMaterialSlots;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Head Hair")
+    FVector ReferenceHairUp = FVector(0, 0, 1);
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Head Hair")
+    FVector HairSphereCenterReferenceCS = FVector::ZeroVector;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category="Head Hair")
+    FVector HairUpWorld = FVector::ZeroVector;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category="Head Hair")
+    FVector HairSphereCenterWorld = FVector::ZeroVector;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category="Head Hair")
+    bool bHairBasisValid = false;
+
+    static bool ComputeHairBasis(const FTransform& ReferenceHead, const FTransform& CurrentHead,
+        const FTransform& ComponentToWorld, const FVector& ReferenceUp, const FVector& ReferenceCenter,
+        FVector& OutUp, FVector& OutCenter);
+
     /** Useful after explicit pose evaluation in editor tools; normal play updates automatically. */
     UFUNCTION(BlueprintCallable, Category="Face SDF")
     void UpdateFaceParameters();
@@ -60,6 +87,7 @@ private:
     FName CachedBone;
     int32 HeadIndex = INDEX_NONE;
     FQuat ReferenceHeadRotation = FQuat::Identity;
+    FTransform ReferenceHeadTransform = FTransform::Identity;
     FDelegateHandle FinalizedHandle;
     UPROPERTY(Transient) TArray<TObjectPtr<UMaterialInstanceDynamic>> Instances;
     UPROPERTY(Transient) TArray<TObjectPtr<UMaterialInterface>> OriginalMaterials;

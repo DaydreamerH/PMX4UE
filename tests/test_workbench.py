@@ -58,6 +58,15 @@ class WorkbenchTests(unittest.TestCase):
             self.assertTrue(spec['env']['PMX4UE_SCRIPT'].endswith(script))
         self.assertFalse(self.a.exists())
 
+    def test_head_hair_stage_requires_reviewed_profile_path(self):
+        with self.assertRaisesRegex(ValueError, 'head_hair_profile'):
+            w.run(self.c, self.project, self.a, 'head-hair')
+        self.c['pmx4ue']['head_hair_profile'] = str(self.root/'head_hair.json')
+        spec = w.run(self.c, self.project, self.a, 'head-hair')
+        self.assertTrue(spec['env']['PMX4UE_SCRIPT'].endswith('ue_head_hair_workflow.py'))
+        self.assertEqual(spec['env']['PMX4UE_HEAD_HAIR_PROFILE'], str(self.root/'head_hair.json'))
+        self.assertFalse(self.a.exists())
+
     def test_bind_warning_never_becomes_clean_execution(self):
         def fake_run(*args, **kwargs):
             kwargs['stdout'].write('Imported skeleton has some INVALID BIND POSES\n')

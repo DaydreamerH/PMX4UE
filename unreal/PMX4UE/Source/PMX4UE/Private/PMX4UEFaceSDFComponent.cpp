@@ -24,6 +24,21 @@ bool UPMX4UEFaceSDFComponent::ComputeBasis(const FQuat& ReferenceHead, const FQu
     return !OutForward.IsNearlyZero() && !OutLeft.IsNearlyZero();
 }
 
+bool UPMX4UEFaceSDFComponent::ComputeHairBasis(const FTransform& ReferenceHead, const FTransform& CurrentHead,
+    const FTransform& ComponentToWorld, const FVector& ReferenceUp, const FVector& ReferenceCenter,
+    FVector& OutUp, FVector& OutCenter)
+{
+    if (ReferenceHead.ContainsNaN() || CurrentHead.ContainsNaN() || ComponentToWorld.ContainsNaN()
+        || ReferenceUp.ContainsNaN() || ReferenceCenter.ContainsNaN()
+        || ReferenceHead.GetScale3D().GetAbsMin() <= SMALL_NUMBER) return false;
+    const FQuat Delta = CurrentHead.GetRotation().GetNormalized()
+        * ReferenceHead.GetRotation().GetNormalized().Inverse();
+    OutUp = ComponentToWorld.TransformVectorNoScale(Delta.RotateVector(ReferenceUp)).GetSafeNormal();
+    OutCenter = ComponentToWorld.TransformPosition(CurrentHead.TransformPosition(
+        ReferenceHead.InverseTransformPosition(ReferenceCenter)));
+    return !OutUp.IsNearlyZero() && !OutUp.ContainsNaN() && !OutCenter.ContainsNaN();
+}
+
 void UPMX4UEFaceSDFComponent::ReleaseMaterials()
 {
     if (USkeletalMeshComponent* Mesh = BoundMesh.Get())
@@ -33,13 +48,14 @@ void UPMX4UEFaceSDFComponent::ReleaseMaterials()
         for (int32 I = 0; I < Instances.Num(); ++I)
         {
             if (Instances[I]) Instances[I]->SetScalarParameterValue(TEXT("FaceBasisRuntimeValid"), 0);
+            if (Instances[I]) Instances[I]->SetScalarParameterValue(TEXT("HairBasisRuntimeValid"), 0);
             if (Instances[I] && Mesh->GetMaterial(I) == Instances[I] && OriginalMaterials.IsValidIndex(I))
                 Mesh->SetMaterial(I, OriginalMaterials[I]);
         }
     }
     Instances.Reset(); OriginalMaterials.Reset(); BoundMesh.Reset(); CachedAsset.Reset();
     FinalizedHandle.Reset();
-    HeadIndex = INDEX_NONE; bBasisValid = false;
+    HeadIndex = INDEX_NONE; bBasisValid = false; bHairBasisValid = false;
 }
 
 void UPMX4UEFaceSDFComponent::UpdateFaceParameters()
@@ -57,6 +73,7 @@ void UPMX4UEFaceSDFComponent::UpdateFaceParameters()
         }
     }
     bBasisValid = false;
+    bHairBasisValid = false;
     if (!SourceMesh || !SourceMesh->GetSkeletalMeshAsset()) return;
     USkeletalMesh* Asset = SourceMesh->GetSkeletalMeshAsset();
     if (CachedAsset.Get() != Asset || CachedBone != HeadBone)
@@ -70,35 +87,60 @@ void UPMX4UEFaceSDFComponent::UpdateFaceParameters()
             for (int32 P = Ref.GetParentIndex(HeadIndex); P != INDEX_NONE; P = Ref.GetParentIndex(P))
                 Reference *= Ref.GetRefBonePose()[P];
             ReferenceHeadRotation = Reference.GetRotation();
+            ReferenceHeadTransform = Reference;
         }
     }
     const TArray<FTransform>& Pose = SourceMesh->GetComponentSpaceTransforms();
     if (Pose.IsValidIndex(HeadIndex))
+    {
         bBasisValid = ComputeBasis(ReferenceHeadRotation, Pose[HeadIndex].GetRotation(),
             SourceMesh->GetComponentTransform(), ReferenceForward, ReferenceLeft, FaceForwardWorld, FaceLeftWorld);
+        if (bDriveHair)
+            bHairBasisValid = ComputeHairBasis(ReferenceHeadTransform, Pose[HeadIndex],
+                SourceMesh->GetComponentTransform(), ReferenceHairUp, HairSphereCenterReferenceCS,
+                HairUpWorld, HairSphereCenterWorld);
+    }
 
     const int32 Count = SourceMesh->GetNumMaterials();
     Instances.SetNum(Count); OriginalMaterials.SetNum(Count);
     for (int32 I = 0; I < Count; ++I)
     {
         UMaterialInterface* Material = SourceMesh->GetMaterial(I);
+        float Contract = 0;
+        const bool FaceOptIn = Material && Material->GetScalarParameterValue(
+            FMaterialParameterInfo(TEXT("FaceBasisRuntimeValid")), Contract);
+        const bool HairOptIn = bDriveHair && HairMaterialSlots.Contains(I) && Material
+            && Material->GetScalarParameterValue(FMaterialParameterInfo(TEXT("HairBasisRuntimeValid")), Contract);
+        if (!FaceOptIn && !HairOptIn)
+        {
+            if (Instances[I] && Material == Instances[I] && OriginalMaterials.IsValidIndex(I))
+            {
+                Instances[I]->SetScalarParameterValue(TEXT("HairBasisRuntimeValid"), 0);
+                SourceMesh->SetMaterial(I, OriginalMaterials[I]);
+            }
+            Instances[I] = nullptr;
+            continue;
+        }
         if (Material != Instances[I] || !Instances[I])
         {
             Instances[I] = nullptr;
-            float Contract = 0;
             // Only opt-in materials. Never write old FaceForwardWS/FaceLeftWS parameters.
-            if (!Material || !Material->GetScalarParameterValue(FMaterialParameterInfo(TEXT("FaceBasisRuntimeValid")), Contract))
-                continue;
             OriginalMaterials[I] = Material;
             Instances[I] = SourceMesh->CreateDynamicMaterialInstance(I, Material);
         }
         if (UMaterialInstanceDynamic* MID = Instances[I])
         {
-            MID->SetScalarParameterValue(TEXT("FaceBasisRuntimeValid"), bBasisValid ? 1 : 0);
-            if (bBasisValid)
+            if (FaceOptIn) MID->SetScalarParameterValue(TEXT("FaceBasisRuntimeValid"), bBasisValid ? 1 : 0);
+            if (FaceOptIn && bBasisValid)
             {
                 MID->SetVectorParameterValue(TEXT("FaceForwardRuntimeWS"), FLinearColor(FaceForwardWorld));
                 MID->SetVectorParameterValue(TEXT("FaceLeftRuntimeWS"), FLinearColor(FaceLeftWorld));
+            }
+            MID->SetScalarParameterValue(TEXT("HairBasisRuntimeValid"), HairOptIn && bHairBasisValid ? 1 : 0);
+            if (HairOptIn && bHairBasisValid)
+            {
+                MID->SetVectorParameterValue(TEXT("HairUpRuntimeWS"), FLinearColor(HairUpWorld));
+                MID->SetVectorParameterValue(TEXT("HeadSphereCenterWS"), FLinearColor(HairSphereCenterWorld));
             }
         }
     }

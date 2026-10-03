@@ -192,7 +192,8 @@ def validate(profile, namespace, source_mesh=None):
                 20 <= camera["fov"] <= 90, "Camera would be clamped by native bridge; adapt bridge for this model")
     for light in profile["lights"]:
         if daylight:
-            require(set(light) <= {"name", "pitch", "yaw_offset", "intensity"}, "Unknown daylight override")
+            require(set(light) <= {"name", "pitch", "yaw", "yaw_offset", "intensity"}, "Unknown daylight override")
+            require(not ("yaw" in light and "yaw_offset" in light), "Use absolute yaw or yaw_offset, not both")
             require(all(type(v) in (float, int) and math.isfinite(v) for k, v in light.items() if k != "name"),
                     "Invalid daylight override")
             require("intensity" not in light or light["intensity"] > 0, "Invalid daylight intensity")
@@ -204,7 +205,10 @@ def validate(profile, namespace, source_mesh=None):
     baseline = profile["cases"][0]
     require(baseline == {"name": "Baseline", "slots": []}, "First case must be unmodified Baseline")
     for case in profile["cases"]:
-        require(set(case) <= {"name", "slots", "outline", "depth_rim"}, "Unknown case field")
+        require(set(case) <= {"name", "slots", "outline", "depth_rim", "head_hair_report"}, "Unknown case field")
+        if "head_hair_report" in case:
+            require(isinstance(case["head_hair_report"], str) and case["head_hair_report"].strip(),
+                    "head_hair_report requires a built report path")
         indices = [r["index"] for r in case["slots"]]
         require(len(indices) == len(set(indices)) and all(type(i) is int and i >= 0 for i in indices), "Invalid slots")
         for row in case["slots"]:

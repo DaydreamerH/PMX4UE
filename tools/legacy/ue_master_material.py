@@ -42,6 +42,35 @@ def _configure_surface(material, blend_mode, shading_model, two_sided=True, tang
         safe_set(material, name, value)
 
 
+def head_hair_inputs(material, x, y):
+    """Per-instance opt-in data, supplied by the shared face/head component."""
+    return {
+        "valid": scalar(material, "HairBasisRuntimeValid", 0.0, x, y),
+        "up": vector(material, "HairUpRuntimeWS", (0.0, 0.0, 1.0, 0.0), x, y + 160),
+        "center": vector(material, "HeadSphereCenterWS", (0.0, 0.0, 0.0, 0.0), x, y + 320),
+    }
+
+
+def hair_view_vertical(material, view_vector, x, y, runtime_basis=None):
+    """UE Z-up baseline; animated users must drive this axis from the head.
+
+    Project onto an explicit world-space up vector rather than copying the
+    reference renderer's world Y component. The runtime branch is opt-in.
+    """
+    up = vector(material, "HairUpWS", (0.0, 0.0, 1.0, 0.0), x, y + 160)
+    basis = runtime_basis if runtime_basis is not None else head_hair_inputs(material, x - 800, y + 320)
+    selected_up = expression(material, unreal.MaterialExpressionLinearInterpolate, x, y + 320)
+    connect(up, "RGB", selected_up, "A")
+    connect(basis["up"], "RGB", selected_up, "B")
+    connect(basis["valid"], "", selected_up, "Alpha")
+    up_normal = expression(material, unreal.MaterialExpressionNormalize, x + 220, y + 160)
+    connect(selected_up, "", up_normal, "VectorInput")
+    vertical = expression(material, unreal.MaterialExpressionDotProduct, x + 440, y)
+    connect(view_vector, "", vertical, "A")
+    connect(up_normal, "", vertical, "B")
+    return vertical
+
+
 def create_master(ctx, texture_map):
     """Build the main PBR/NPR master and return it."""
     d = ctx.default_texture
@@ -267,9 +296,14 @@ def create_master(ctx, texture_map):
     sphere_center = expression(material, unreal.MaterialExpressionAdd, -560, 1470)
     connect(object_position, "", sphere_center, "A")
     connect(normal_sphere_offset, "RGB", sphere_center, "B")
+    hair_basis = head_hair_inputs(material, -1900, 1500)
+    selected_sphere_center = expression(material, unreal.MaterialExpressionLinearInterpolate, -560, 1330)
+    connect(sphere_center, "", selected_sphere_center, "A")
+    connect(hair_basis["center"], "RGB", selected_sphere_center, "B")
+    connect(hair_basis["valid"], "", selected_sphere_center, "Alpha")
     sphere_delta = expression(material, unreal.MaterialExpressionSubtract, -340, 1470)
     connect(world_position, "", sphere_delta, "A")
-    connect(sphere_center, "", sphere_delta, "B")
+    connect(selected_sphere_center, "", sphere_delta, "B")
     sphere_normal = expression(material, unreal.MaterialExpressionNormalize, -120, 1470)
     connect(sphere_delta, "", sphere_normal, "VectorInput")
     normal_warp_strength = expression(material, unreal.MaterialExpressionScalarParameter, -560, 1600)
@@ -573,17 +607,12 @@ def create_master(ctx, texture_map):
     detail_mask = texture_parameter(material, "DetailMaskTexture", d("spec_mask"), -1000, 1660, sampler_type("SAMPLERTYPE_MASKS"))
     hair_uv1 = expression(material, unreal.MaterialExpressionTextureCoordinate, -1000, 3220)
     safe_set(hair_uv1, "coordinate_index", 1)
-    camera_y = expression(material, unreal.MaterialExpressionComponentMask, -780, 3220)
-    safe_set(camera_y, "r", False)
-    safe_set(camera_y, "g", True)
-    safe_set(camera_y, "b", False)
-    safe_set(camera_y, "a", False)
-    connect(camera_vector, "", camera_y, "")
+    camera_vertical = hair_view_vertical(material, camera_vector, -1440, 3220, hair_basis)
     hair_offset_speed = expression(material, unreal.MaterialExpressionScalarParameter, -780, 3360)
     safe_set(hair_offset_speed, "parameter_name", "HairSpecOffsetSpeed")
     safe_set(hair_offset_speed, "default_value", 0.08)
     hair_view_offset = expression(material, unreal.MaterialExpressionMultiply, -560, 3220)
-    connect(camera_y, "", hair_view_offset, "A")
+    connect(camera_vertical, "", hair_view_offset, "A")
     connect(hair_offset_speed, "", hair_view_offset, "B")
     hair_view_offset_negative = expression(material, unreal.MaterialExpressionMultiply, -340, 3220)
     connect(hair_view_offset, "", hair_view_offset_negative, "A")
@@ -843,7 +872,22 @@ def create_glass(ctx):
 
 
 def create_bang_passes(ctx, hair_base_texture, hair_spec_texture, bang_opacity=0.82, eye_opacity=0.22):
-    """Stencil-aware fringe passes.  Operate on the shared mesh; no copy."""
+    """The old translucent fringe path is disabled after rendering failures."""
+    raise BuildError(
+        "Legacy bang translucency is disabled: it has reported rendering errors "
+        "and lacks verified opaque-layer exclusion and per-region pass routing. "
+        "Implement a separate reviewed hair/bangs graph and component routing; "
+        "see docs/hair-bangs-workflow.md. Do not bypass by making all bangs translucent."
+    )
+
+
+def _create_legacy_bang_candidates(ctx, hair_base_texture, hair_spec_texture, bang_opacity=0.82, eye_opacity=0.22):
+    """Build fringe candidates; component routing/stencil setup is separate.
+
+    Retained only for source reference, not a supported build entry. This
+    translucent approximation does not implement the reference's opaque
+    stencil-exclusion pass or its stencil-only shadow writer.
+    """
     if hair_base_texture is None or hair_spec_texture is None:
         raise BuildError("bang passes require a hair base texture and a UV1 specular mask")
 
@@ -899,15 +943,10 @@ def create_bang_passes(ctx, hair_base_texture, hair_spec_texture, bang_opacity=0
     connect(spec_biased, "", spec_intensity, "")
     uv1 = expression(overlay, unreal.MaterialExpressionTextureCoordinate, -1600, 980)
     safe_set(uv1, "coordinate_index", 1)
-    camera_y = expression(overlay, unreal.MaterialExpressionComponentMask, -1380, 980)
-    safe_set(camera_y, "r", False)
-    safe_set(camera_y, "g", True)
-    safe_set(camera_y, "b", False)
-    safe_set(camera_y, "a", False)
-    connect(camera, "", camera_y, "")
+    camera_vertical = hair_view_vertical(overlay, camera, -2040, 980)
     offset_speed = scalar(overlay, "HairSpecOffsetSpeed", 0.05, -1380, 1120)
     view_offset = expression(overlay, unreal.MaterialExpressionMultiply, -1160, 980)
-    connect(camera_y, "", view_offset, "A")
+    connect(camera_vertical, "", view_offset, "A")
     connect(offset_speed, "", view_offset, "B")
     view_offset_negative = expression(overlay, unreal.MaterialExpressionMultiply, -940, 980)
     connect(view_offset, "", view_offset_negative, "A")

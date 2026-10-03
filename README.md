@@ -104,12 +104,16 @@ python pmx4ue.py install-plugin --config "characters/MyCharacter/character.json"
 
 新增 [头骨驱动 Face SDF](docs/face-sdf-runtime.md)：`face-sdf` 阶段按模型审核骨名、槽和参考方向，生成独立材质与测试角色。插件包含运行时组件；在角色实例中验证动画跟随，不以材质编译或普通 ABP 预览代替动态验收。
 
+[头发渲染规范](docs/hair-rendering-standard.md) 以已核对的独立工程实际方案为基准：头部空间高光带、球形漫反射、距离场额前投影、保留不透明刘海的受控眉眼补绘。配合 [头发与刘海流程](docs/hair-bangs-workflow.md) 与 [装配记录](templates/hair-assembly.md) 完成实际组件/section 路由与原眼着色/裁切/前后关系，参数按当前模型拟合。`head-hair` 和计算 helper 只覆盖局部能力，不是完整装配；少量日光近景 A/B 后另验动态与性能。旧错误刘海入口保持禁用。
+
 - 脚本：PMX/贴图盘点、厘米导出、骨骼审计及有证据的上半身优化、材质构建、IK 配置、PMX 刚体/关节/碰撞组转换、独立物理资产与测试 ABP、数值及 PIE 性能测试。
 - agent：材质槽与纹理语义、风格、骨骼角色和链条、重定向姿势、PMX 分区依据、特殊关节适配、视觉验收。可以修改脚本并补回归用例，而不是无限试参数。
 - PMX 不含走路动画。没有提供动画时使用 `rest_only=true`、空 `test_animation`，仍启用性能测试，构建/测量静止物理；标记动态验收未完成。有动作后用 `animation-export` 创建同骨架新动画，再建新的动态物理版本。
 - 支持边界与版本实测见 [VERIFICATION.md](VERIFICATION.md)。现有成功案例不是其它角色必然 60 FPS 的承诺。
 
 ## 管理与拓展
+
+[独立工程实践提炼](docs/reference-implementation-transfer.md) 已接入头部空间高光带、刘海距离场转换、分眼局部透视计算 helper 与准确版本组合审阅。`head-hair` 可选择审核后的 `head_band`；投影/透视额外 Pass 仍需按模型接入与实测，不把 helper 或参考画面当作自动完成。
 
 这是独立 Git 仓库。角色差异首先放角色配置；多角色可复用的能力进入工具或预设；引擎差异进入明确的适配层。实验先建分支/新资产版本，小提交记录证据。
 

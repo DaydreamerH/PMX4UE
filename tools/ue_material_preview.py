@@ -18,6 +18,8 @@ from capture_retention import remove_native_duplicate
 from material_preview_contract import validate, capture_jobs, png_evidence, require, verify_environment_review, CapturePixelsError
 from ue_bridge import resolve, checked
 from preview_framing import camera_spec, verify_framing
+from head_hair_profile import validate_profile as validate_hair_profile
+from ue_head_hair_binding import apply_binding
 
 
 def read(path):
@@ -71,7 +73,46 @@ class Preview:
         require(isinstance(self.mesh, unreal.SkeletalMesh), "Missing skeletal mesh")
         self.materials = [m.get_editor_property("material_interface") for m in self.mesh.get_editor_property("materials")]
         require(self.materials and all(self.materials), "Empty material slot")
+        self.hair_reports, self.hair_files = {}, {}
+        for case in self.p["cases"]:
+            if "head_hair_report" not in case:
+                continue
+            path = Path(case["head_hair_report"]).resolve()
+            report = read(path)
+            require(report.get("status") == "built_needs_runtime_visual_review" and
+                    report.get("input_assets_unchanged") is True, "Head hair build did not pass")
+            calibration = validate_hair_profile(report["profile"], config["paths"]["ue_root"])
+            require(calibration["mesh"] == self.p["mesh"], "Head hair report targets another mesh")
+            require(report.get("component_overrides"), "Head hair report has no material overrides")
+            overrides = report["component_overrides"]
+            require(len({r["index"] for r in overrides}) == len(overrides) and
+                    {r["slot"] for r in overrides} == set(calibration["hair_slots"]), "Invalid hair slot receipt")
+            for row in overrides:
+                require(type(row["index"]) is int and 0 <= row["index"] < len(self.materials) and
+                        str(self.mesh.get_editor_property("materials")[row["index"]].material_slot_name) == row["slot"],
+                        "Head hair slot layout changed")
+                require(row["material"].split('.')[0].startswith(config["paths"]["ue_root"] + '/'),
+                        "Head hair material outside work order")
+            by_index = {r["index"]: r["material"].split('.')[0] for r in overrides}
+            for row in case["slots"]:
+                if row["index"] in by_index and row.get("material"):
+                    require(row["material"].split('.')[0] == by_index[row["index"]],
+                            "Case material conflicts with head hair binding")
+            self.hair_reports[case["name"]] = report
+            self.hair_files[str(path)] = hashlib.sha256(path.read_bytes()).hexdigest()
+        providers = {r["profile"]["provider"] for r in self.hair_reports.values()}
+        require(len(providers) <= 1, "Split preview runs using different runtime providers")
+        self.hair_actor_class = None
+        self.hair_driver = None
+        if providers:
+            class_name = "MMDFaceSDFPreviewActor" if next(iter(providers)) == "mmd2ue" else "PMX4UEFaceSDFPreviewActor"
+            self.hair_actor_class = getattr(unreal, class_name, None)
+            require(self.hair_actor_class is not None, "Missing compiled head hair preview actor: " + class_name)
         assets = [self.mesh.get_path_name()] + [m.get_path_name() for m in self.materials]
+        hair_source_assets = []
+        for report in self.hair_reports.values():
+            assets += [r["material"] for r in report["component_overrides"]]
+            hair_source_assets += list(report.get("input_hashes", {}))
         for case in self.p["cases"]:
             for row in case["slots"]:
                 require(row["index"] < len(self.materials), "Slot outside mesh")
@@ -103,12 +144,18 @@ class Preview:
             name = material.get_path_name()
             if name not in self.report["compile"]:
                 self.report["compile"][name] = native(self.api.inspect_material_compile(name))
-        self.inputs = self.dependencies(assets)
+        self.inputs = self.dependencies(assets + hair_source_assets)
+        for report in self.hair_reports.values():
+            for asset, expected in report.get("input_hashes", {}).items():
+                filename = str(self.project / "Content" / (asset.split('.')[0][len('/Game/'):] + ".uasset"))
+                require(self.inputs["game_package_sha256"].get(filename) == expected,
+                        "Head hair source changed since build: " + asset)
         self.report.update(schema="pmx4ue.material-captures.v1", profile=self.p,
                            profile_sha256=hashlib.sha256(profile_path.read_bytes()).hexdigest(),
                            engine=unreal.SystemLibrary.get_engine_version(), provider=self.api.__name__,
                            rendering="owned_visible_editor_viewport", input_assets=self.inputs,
                            scope="Static material review only; no animation, physics or runtime SDF acceptance")
+        self.report["head_hair_report_sha256"] = self.hair_files
         # v3 reviews the installed daylight map itself, only in this owned
         # process. No copied custom level and no save of the Engine template.
         self.daylight = self.p["schema"] in ("pmx4ue.material-preview.v2", "pmx4ue.material-preview.v3")
@@ -139,12 +186,16 @@ class Preview:
         require(world.get_path_name().split('.')[0] == expected_world, "Wrong daylight/editor world")
         # Record the actual render setting with each capture; do not change it
         # to mask a texture-streaming or mip-residency problem.
-        self.actor = self.spawn(unreal.SkeletalMeshActor, "PMX4UE_MaterialReview")
+        self.actor = self.spawn(self.hair_actor_class or unreal.SkeletalMeshActor, "PMX4UE_MaterialReview")
         if self.daylight:
             self.actor.set_actor_location(unreal.Vector(*self.p["environment"]["model_location"]), False, False)
         self.body = self.actor.get_editor_property("skeletal_mesh_component")
         self.body.set_skeletal_mesh_asset(self.mesh)
         self.body.set_update_animation_in_editor(False)
+        if self.hair_actor_class:
+            self.hair_driver = self.actor.get_editor_property("face_sdf")
+            self.hair_driver.set_editor_property("source_mesh", None)
+            self.hair_driver.update_face_parameters()
         self.camera = self.spawn(unreal.CameraActor, "PMX4UE_ReviewCamera")
         self.setup_lighting()
         if self.p["exposure_ev100"] is not None:
@@ -257,6 +308,9 @@ class Preview:
         return native(self.api.set_character_depth_rim(self.actor.get_actor_label(), path, 1, weight, False))
 
     def apply_case(self, case):
+        if self.hair_driver:
+            self.hair_driver.set_editor_property("source_mesh", None)
+            self.hair_driver.update_face_parameters()
         if self.previous_case:
             if "outline" in self.previous_case:
                 self.outline(self.previous_case["outline"], clear=True)
@@ -268,15 +322,37 @@ class Preview:
         for row in case["slots"]:
             material = unreal.load_asset(row["material"]) if row.get("material") else self.materials[row["index"]]
             self.body.set_material(row["index"], material)
+        hair_report = self.hair_reports.get(case["name"])
+        if hair_report:
+            apply_binding(hair_report, self.body, self.hair_driver)
+        for row in case["slots"]:
             if row.get("scalars"):
+                material = self.body.get_material(row["index"])
                 names = {str(n) for n in unreal.MaterialEditingLibrary.get_scalar_parameter_names(material)}
                 require(set(row["scalars"]) <= names, "Unknown scalar parameter; inspect variant graph")
-                mid = self.body.create_dynamic_material_instance(row["index"], material)
+                mid = material if isinstance(material, unreal.MaterialInstanceDynamic) else self.body.create_dynamic_material_instance(row["index"], material)
                 require(mid is not None, "Could not create transient material override")
                 self.mids.append(mid)
                 for name, value in row["scalars"].items():
                     mid.set_scalar_parameter_value(name, float(value))
         self.applied_effects = {}
+        if hair_report:
+            self.hair_driver.update_face_parameters()
+            require(self.hair_driver.get_editor_property("hair_basis_valid"), "Head hair basis invalid in preview")
+            receipt = dict(head_bone=hair_report["profile"]["head_bone"], materials=[])
+            for row in hair_report["component_overrides"]:
+                mid = self.body.get_material(row["index"])
+                require(isinstance(mid, unreal.MaterialInstanceDynamic), "Head hair binding did not produce an MID")
+                # MaterialEditingLibrary getter only accepts Constant instances.
+                # MID's ScriptName=GetScalarParameterValue reads the live override.
+                valid = float(mid.get_scalar_parameter_value("HairBasisRuntimeValid"))
+                require(valid > .99, "Hair preview still using fallback")
+                receipt["materials"].append(dict(index=row["index"], active=valid,
+                    parent=mid.get_editor_property("parent").get_path_name(),
+                    highlight_strength=float(mid.get_scalar_parameter_value("HairHighlightStrength"))))
+            receipt["center_ws"] = str(self.hair_driver.get_editor_property("hair_sphere_center_world"))
+            receipt["up_ws"] = str(self.hair_driver.get_editor_property("hair_up_world"))
+            self.applied_effects["head_hair"] = receipt
         if "outline" in case:
             self.applied_effects["outline"] = self.outline(case["outline"])
         if "depth_rim" in case:
@@ -295,7 +371,7 @@ class Preview:
                 if case != self.previous_case:
                     self.apply_case(case)
                 rotation = (unreal.Rotator(pitch=light.get("pitch", self.sun_rotation.pitch),
-                            yaw=self.sun_rotation.yaw + light.get("yaw_offset", 0.), roll=self.sun_rotation.roll)
+                            yaw=light.get("yaw", self.sun_rotation.yaw + light.get("yaw_offset", 0.)), roll=self.sun_rotation.roll)
                             if self.daylight else unreal.Rotator(pitch=light["pitch"], yaw=light["yaw"], roll=0.))
                 self.light.set_actor_rotation(rotation, False)
                 self.light_component.set_intensity(light.get("intensity", self.sun_intensity))
@@ -388,6 +464,8 @@ class Preview:
             if hasattr(self, "inputs"):
                 unchanged = all(Path(p).is_file() and hashlib.sha256(Path(p).read_bytes()).hexdigest() == value
                                 for p, value in self.inputs["game_package_sha256"].items())
+                unchanged = unchanged and all(Path(p).is_file() and hashlib.sha256(Path(p).read_bytes()).hexdigest() == value
+                                             for p, value in self.hair_files.items())
         except OSError:
             error = (error or "") + traceback.format_exc()
         if hasattr(self, "daylight_file"):
@@ -412,9 +490,10 @@ class Preview:
                 unreal.SystemLibrary.execute_console_command(self.editor.get_editor_world(), "QUIT_EDITOR")
 
 
-preview = Preview()
-try:
-    preview.start()
-except Exception:
-    preview.finish(traceback.format_exc())
-    raise
+if __name__ == "__main__":
+    preview = Preview()
+    try:
+        preview.start()
+    except Exception:
+        preview.finish(traceback.format_exc())
+        raise
